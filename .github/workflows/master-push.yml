@@ -38,4 +38,16 @@ jobs:
               with:
                   args: zip -qq -r ./bundle.zip ./
 
-            # TODO deploy on AWS Lambda
+            - name: Deploy on AWS lambda eu-west-3
+              uses: appleboy/lambda-action@master
+              with:
+                  aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws_region: eu-west-3
+                  zip_file: bundle.zip
+                  function_name: terragridsProjectContractApiDev
+                  handler: src/serverless.handler
+                  memory_size: 256
+                  timeout: 10
+
+            # TODO deploy on AWS Lambda es-west-1
