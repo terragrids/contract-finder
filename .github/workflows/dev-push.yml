@@ -1,0 +1,41 @@
+name: dev-push
+
+on:
+    push:
+        branches: [dev]
+
+jobs:
+    test_deploy:
+        # The type of runner that the job will run on
+        name: Test and deploy on node ${{ matrix.node_version }} and ${{ matrix.os }}
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                node_version: ['16']
+                os: [ubuntu-latest]
+
+        steps:
+            - name: Setup node.js environment
+              uses: actions/setup-node@v3
+              with:
+                  # Version Spec of the version to use. Examples: 12.x, 10.15.1, >=10.15.0
+                  node-version: ${{ matrix.node_version }}
+
+            # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+            - uses: actions/checkout@v3
+
+            - name: Install npm modules and run tests
+              run: |
+                  npm install
+                  npm test
+                  npm run lint
+              env:
+                  ENV: dev
+                  AWS_REGION: local
+
+            - name: Create Zip File
+              uses: montudor/action-zip@v1
+              with:
+                  args: zip -qq -r ./bundle.zip ./
+
+            # TODO deploy on AWS Lambda
