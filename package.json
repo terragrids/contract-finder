@@ -19,6 +19,7 @@
     "homepage": "https://github.com/terragrids/project-contract-api#readme",
     "dependencies": {
         "@koa/router": "^12.0.0",
+        "@reach-sh/stdlib": "^0.1.12-rc.1",
         "dotenv": "^16.0.2",
         "koa": "^2.13.4",
         "koa-bodyparser": "^4.3.0",

@@ -1,7 +1,9 @@
 {
-  "javascript.suggest.completeFunctionCalls": true,
-  "files.insertFinalNewline": true,
-  "files.trimFinalNewlines": true,
-  "editor.formatOnSave": true,
-  "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "javascript.suggest.completeFunctionCalls": true,
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": true,
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "cSpell.enableFiletypes": ["javascript"],
+    "cSpell.words": ["terragrids"]
 }
