@@ -1,0 +1,36 @@
+name: deploy
+
+on:
+    workflow_call:
+        inputs:
+            lambdaFunctionName:
+                required: true
+                type: string
+
+jobs:
+    deploy:
+        # The type of runner that the job will run on
+        name: Deploy on node ${{ matrix.node_version }} and ${{ matrix.os }}
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                node_version: ['16']
+                os: [ubuntu-latest]
+
+        steps:
+            - name: Create Zip File
+              uses: montudor/action-zip@v1
+              with:
+                  args: zip -qq -r ./bundle.zip ./
+
+            - name: Deploy on AWS lambda eu-west-3
+              uses: appleboy/lambda-action@master
+              with:
+                  aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws_region: eu-west-3
+                  zip_file: bundle.zip
+                  function_name: ${{ inputs.lambdaFunctionName }}
+                  handler: src/serverless.handler
+                  memory_size: 256
+                  timeout: 10

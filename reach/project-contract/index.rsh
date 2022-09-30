@@ -11,42 +11,44 @@ export const main = Reach.App(() => {
     const A = Participant('Admin', {
         ...hasConsoleLogger,
         onReady: Fun(true, Null),
-        name: Bytes(32),
-        url: Bytes(96),
-        metadata: Bytes(32)
+        projectToken: Token
     })
 
-    const ProjectView = View('ProjectView', {
-        project: Token
+    const ProjectView = View('View', {
+        projectToken: Token
     })
 
     const Api = API('Api', {
+        update: Fun([Token], Null),
         stop: Fun([], Bool)
     })
 
     init()
 
     A.only(() => {
-        const [name, url, metadata] = declassify([interact.name, interact.url, interact.metadata])
+        const [projectToken] = declassify([interact.projectToken])
     })
-    A.publish(name, url, metadata)
 
-    const projectToken = new Token({ name, url, metadata, supply: 1, decimals: 0 })
+    A.publish(projectToken)
 
-    commit()
-
-    A.publish()
-    assert(balance(projectToken) == 1, 'NFT balance must be 1 at start')
+    require(balance(projectToken) == 0, 'NFT balance must be 0 at start')
 
     A.interact.onReady(getContract())
     A.interact.log('The project contract is ready')
 
     const [done, token] = parallelReduce([false, projectToken])
         .define(() => {
-            ProjectView.project.set(token)
+            ProjectView.projectToken.set(token)
         })
-        .invariant(balance() == 0 && balance(projectToken) == 1 && projectToken.supply() == 1 && projectToken.destroyed() == false)
+        .invariant(balance() == 0 && balance(projectToken) == 0)
         .while(!done)
+        /**
+         * Update project token
+         */
+        .api(Api.update, (newToken, k) => {
+            k(null)
+            return [false, newToken]
+        })
         /**
          * Stops this contract
          */
@@ -65,15 +67,8 @@ export const main = Reach.App(() => {
         )
         .timeout(false)
 
-    assert(balance(projectToken) == 1, 'NFT balance must be 1 before burning')
+    require(balance(projectToken) == 0, 'NFT balance must be 0 at end')
 
-    projectToken.burn()
-
-    assert(balance(projectToken) == 0, 'NFT balance must be 0 after burning')
-    assert(projectToken.supply() == 0, 'NFT supply must be 0 after burning')
-    assert(projectToken.destroyed() == false, 'NFT supply must must not be destroyed before destruction')
-
-    projectToken.destroy()
     commit()
 
     A.interact.log('The project contract is closing down...')

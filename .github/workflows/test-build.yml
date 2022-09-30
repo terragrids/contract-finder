@@ -1,18 +1,18 @@
-name: dev-pr
+name: test-build
 
 on:
-    pull_request:
-        branches: [dev]
+    workflow_call:
 
 jobs:
     test:
         # The type of runner that the job will run on
-        name: Test PR on node ${{ matrix.node_version }} and ${{ matrix.os }}
+        name: Test ${{ github.ref_name }} on node ${{ matrix.node_version }} and ${{ matrix.os }}
         runs-on: ${{ matrix.os }}
         strategy:
             matrix:
                 node_version: ['16']
                 os: [ubuntu-latest]
+                reach_hash: [4ca32459]
 
         steps:
             - name: Setup node.js environment
@@ -23,6 +23,12 @@ jobs:
 
             # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
             - uses: actions/checkout@v3
+
+            - name: Build and test Reach backend (version ${{ matrix.reach_hash }})
+              run: |
+                  cd reach
+                  REACH_VERSION=${{ matrix.reach_hash }} ./reach run project-contract
+                  cd ..
 
             - name: Install npm modules and run tests
               run: |

@@ -1,0 +1,9 @@
+name: dev-pr
+
+on:
+    pull_request:
+        branches: [dev, master]
+
+jobs:
+    test-build:
+        uses: /.github/workflows/test-build.yml
