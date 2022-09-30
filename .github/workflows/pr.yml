@@ -1,4 +1,4 @@
-name: dev-pr
+name: pr
 
 on:
     pull_request:
@@ -6,4 +6,4 @@ on:
 
 jobs:
     test-build:
-        uses: /.github/workflows/test-build.yml
+        uses: ./.github/workflows/test-build.yml
