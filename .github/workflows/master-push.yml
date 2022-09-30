@@ -15,7 +15,8 @@ jobs:
                 reach_hash: [4ca32459]
 
         steps:
-            - uses: actions/checkout@v3
+            - name: Checkout repository
+              uses: actions/checkout@v3
             - name: test & build
               uses: ./.github/workflows/test-build.yml
             - name: deploy
