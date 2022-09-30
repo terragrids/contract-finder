@@ -28,6 +28,8 @@ jobs:
                   cd reach
                   REACH_VERSION=${{ matrix.reach_hash }} ./reach run project-contract
                   cd ..
+              env:
+                  REACH_CONNECTOR_MODE: ALGO
 
             - name: Install npm modules and run tests
               run: |
