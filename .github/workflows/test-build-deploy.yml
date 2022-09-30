@@ -4,8 +4,10 @@ on:
     workflow_call:
         inputs:
             deploy:
+                description: 'Specifies whether to deploy on lambda'
+                type: boolean
                 required: false
-                default: 'false'
+                default: false
 
 jobs:
     test:
