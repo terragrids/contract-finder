@@ -60,7 +60,7 @@ jobs:
                   aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
                   aws_region: eu-west-3
                   zip_file: bundle.zip
-                  function_name: ${{ inputs.lambdaFunctionName }}
+                  function_name: terragridsProjectContractApiDev
                   handler: src/serverless.handler
                   memory_size: 256
                   timeout: 10
