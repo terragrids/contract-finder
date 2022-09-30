@@ -5,14 +5,8 @@ on:
 
 jobs:
     test:
-        # The type of runner that the job will run on
         name: Test ${{ github.ref_name }} on node ${{ matrix.node_version }} and ${{ matrix.os }}
         runs-on: ${{ matrix.os }}
-        strategy:
-            matrix:
-                node_version: ['16']
-                os: [ubuntu-latest]
-                reach_hash: [4ca32459]
 
         steps:
             - name: Setup node.js environment

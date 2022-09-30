@@ -5,9 +5,19 @@ on:
         branches: [dev]
 
 jobs:
-    test-build:
-        uses: ./.github/workflows/test-build.yml
-    deploy:
-        uses: ./.github/workflows/deploy.yml
-        with:
-            lambdaFunctionName: terragridsProjectContractApiDev
+    test-build-deploy:
+        name: Test, build and deploy ${{ github.ref_name }} on node ${{ matrix.node_version }} and ${{ matrix.os }}
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                node_version: ['16']
+                os: [ubuntu-latest]
+                reach_hash: [4ca32459]
+
+        steps:
+            - test-build:
+                  uses: ./.github/workflows/test-build.yml
+            - deploy:
+                  uses: ./.github/workflows/deploy.yml
+                  with:
+                      lambdaFunctionName: terragridsProjectContractApiDev

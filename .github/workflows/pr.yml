@@ -6,4 +6,14 @@ on:
 
 jobs:
     test-build:
-        uses: ./.github/workflows/test-build.yml
+        name: Test and build ${{ github.ref_name }} on node ${{ matrix.node_version }} and ${{ matrix.os }}
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                node_version: ['16']
+                os: [ubuntu-latest]
+                reach_hash: [4ca32459]
+
+        steps:
+            - test-build:
+                  uses: ./.github/workflows/test-build.yml
