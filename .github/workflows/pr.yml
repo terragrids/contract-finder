@@ -15,5 +15,5 @@ jobs:
                 reach_hash: [4ca32459]
 
         steps:
-            - test-build:
-                  uses: ./.github/workflows/test-build.yml
+            - name: test & build
+              uses: ./.github/workflows/test-build.yml
