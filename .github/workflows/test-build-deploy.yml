@@ -46,13 +46,13 @@ jobs:
                   ENV: dev
                   AWS_REGION: local
 
-            - if: ${{ inputs.deploy == 'true' }}
+            - if: ${{ inputs.deploy == true }}
               name: Create Zip File
               uses: montudor/action-zip@v1
               with:
                   args: zip -qq -r ./bundle.zip ./
 
-            - if: ${{ inputs.deploy == 'true' }}
+            - if: ${{ inputs.deploy == true }}
               name: Deploy on AWS lambda eu-west-3
               uses: appleboy/lambda-action@master
               with:
