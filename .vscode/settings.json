@@ -4,6 +4,14 @@
     "files.trimFinalNewlines": true,
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "esbenp.prettier-vscode",
-    "cSpell.enableFiletypes": ["javascript"],
-    "cSpell.words": ["terragrids"]
+    "cSpell.enableFiletypes": [
+        "javascript"
+    ],
+    "cSpell.words": [
+        "terragrids"
+    ],
+    "files.associations": {
+        "*.rsh": "javascript"
+    },
+    "typescript.validate.enable": false
 }
