@@ -1,0 +1,22 @@
+{
+    "env": {
+        "node": true,
+        "es2021": true,
+        "jest": true
+    },
+    "extends": "eslint:recommended",
+    "parser": "@babel/eslint-parser",
+    "parserOptions": {
+        "sourceType": "module",
+        "ecmaVersion": 2017
+    },
+    "plugins": ["jest"],
+    "rules": {
+        "semi": ["error", "never"],
+        "quotes": ["error", "single"],
+        "comma-dangle": ["error", "never"],
+        "no-unused-vars": "error",
+        "no-console": "error"
+    },
+    "ignorePatterns": ["*.rsh"]
+}

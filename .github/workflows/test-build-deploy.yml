@@ -1,0 +1,65 @@
+name: test-build-deploy
+
+on:
+    workflow_call:
+        inputs:
+            deploy:
+                description: 'Specifies whether to deploy on lambda'
+                type: boolean
+                required: false
+                default: false
+
+jobs:
+    test:
+        name: Test ${{ github.ref_name }} on node ${{ matrix.node_version }} and ${{ matrix.os }}
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                node_version: ['16']
+                os: [ubuntu-latest]
+                reach_hash: [4ca32459]
+
+        steps:
+            - name: Setup node.js environment
+              uses: actions/setup-node@v3
+              with:
+                  node-version: ${{ matrix.node_version }}
+
+            - name: Checkout repository
+              uses: actions/checkout@v3
+
+            - name: Build and test Reach backend (version ${{ matrix.reach_hash }})
+              run: |
+                  cd reach
+                  REACH_VERSION=${{ matrix.reach_hash }} ./reach run project-contract
+                  cd ..
+              env:
+                  REACH_CONNECTOR_MODE: ALGO
+
+            - name: Install npm modules and run tests
+              run: |
+                  npm install
+                  npm test
+                  npm run lint
+              env:
+                  ENV: dev
+                  AWS_REGION: local
+
+            - if: ${{ inputs.deploy == true }}
+              name: Create Zip File
+              uses: montudor/action-zip@v1
+              with:
+                  args: zip -qq -r ./bundle.zip ./
+
+            - if: ${{ inputs.deploy == true }}
+              name: Deploy on AWS lambda eu-west-3
+              uses: appleboy/lambda-action@master
+              with:
+                  aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws_region: eu-west-3
+                  zip_file: bundle.zip
+                  function_name: terragridsProjectContractApiDev
+                  handler: src/serverless.handler
+                  memory_size: 256
+                  timeout: 10

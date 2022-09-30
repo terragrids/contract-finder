@@ -1,0 +1,12 @@
+name: dev-push
+
+on:
+    push:
+        branches: [dev]
+
+jobs:
+    test-build:
+        uses: ./.github/workflows/test-build-deploy.yml
+        secrets: inherit
+        with:
+            deploy: true

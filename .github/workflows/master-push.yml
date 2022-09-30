@@ -1,0 +1,12 @@
+name: master-push
+
+on:
+    push:
+        branches: [master]
+
+jobs:
+    test-build:
+        uses: ./.github/workflows/test-build-deploy.yml
+        secrets: inherit
+        with:
+            deploy: true
