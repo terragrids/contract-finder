@@ -6,10 +6,6 @@ on:
 
 jobs:
     test-build:
-        uses: ./.github/workflows/test-build.yml
-
-    deploy:
-        uses: ./.github/workflows/deploy.yml
+        uses: ./.github/workflows/test-build-deploy.yml
         with:
-            lambdaFunctionName: terragridsProjectContractApiDev
-        needs: test-build
+            deploy: true
