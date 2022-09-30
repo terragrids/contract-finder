@@ -12,6 +12,10 @@ jobs:
         # The type of runner that the job will run on
         name: Deploy on node ${{ matrix.node_version }} and ${{ matrix.os }}
         runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                node_version: ['16']
+                os: [ubuntu-latest]
 
         steps:
             - name: Create Zip File
