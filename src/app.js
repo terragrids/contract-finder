@@ -26,15 +26,25 @@ router.get('/hc', async ctx => {
     stdlib.setProviderByName(env)
     const provider = await stdlib.getProvider()
 
-    const [algoClientHC, algoIndexerHC] = await Promise.all([provider.algodClient.healthCheck().do(), provider.indexer.makeHealthCheck().do()])
+    const [algoClientHC, algoIndexerHC, algoAccount] = await Promise.all([
+        provider.algodClient.healthCheck().do(), // algo sdk client
+        provider.indexer.makeHealthCheck().do(), // algo indexer client
+        stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC) // reach account handle
+    ])
+
+    console.log(JSON.stringify(algoAccount, null, 4))
+
+    const ok = 'ok'
+    const error = 'error'
 
     ctx.body = {
         env: process.env.ENV,
         region: process.env.AWS_REGION,
         reach: {
             network: env,
-            algoClient: JSON.stringify(algoClientHC) === '{}' ? 'ok' : 'error',
-            algoIndexer: algoIndexerHC.version ? 'ok' : 'error'
+            algoClient: JSON.stringify(algoClientHC) === '{}' ? ok : error,
+            algoIndexer: algoIndexerHC.version ? ok : error,
+            algoAccount: algoAccount.networkAccount ? ok : error
         }
     }
 })
