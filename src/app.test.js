@@ -1,20 +1,24 @@
 import { app } from './app.js'
 import request from 'supertest'
 
-const mockLoadStdlib = {
+const mockStdlib = {
     setProviderByName: jest.fn().mockImplementation(() => jest.fn()),
     getProvider: jest.fn().mockImplementation(() => jest.fn()),
-    newAccountFromMnemonic: jest.fn().mockImplementation(() => jest.fn())
+    newAccountFromMnemonic: jest.fn().mockImplementation(() => jest.fn()),
+    launchToken: jest.fn().mockImplementation(() => jest.fn())
 }
 
-jest.mock('@reach-sh/stdlib', () => ({
-    ...jest.requireActual('@reach-sh/stdlib'),
-    loadStdlib: jest.fn().mockImplementation(() => ({
-        setProviderByName: mockLoadStdlib.setProviderByName,
-        getProvider: mockLoadStdlib.getProvider,
-        newAccountFromMnemonic: mockLoadStdlib.newAccountFromMnemonic
+jest.mock('./provider/reach-provider.js', () =>
+    jest.fn().mockImplementation(() => ({
+        getStdlib: jest.fn().mockImplementation(() => ({
+            setProviderByName: mockStdlib.setProviderByName,
+            getProvider: mockStdlib.getProvider,
+            newAccountFromMnemonic: mockStdlib.newAccountFromMnemonic,
+            launchToken: mockStdlib.launchToken
+        })),
+        getEnv: jest.fn().mockImplementation(() => 'TestNet')
     }))
-}))
+)
 
 describe('app', function () {
     const OLD_ENV = process.env
@@ -37,17 +41,15 @@ describe('app', function () {
     })
 
     describe('get health check endpoint', function () {
-        it('should return 200 when calling hc endpoint on TestNet and all is healthy', async () => {
-            process.env.ENV = 'dev'
-
-            mockLoadStdlib.getProvider.mockImplementation(() =>
+        it('should return 200 when calling hc endpoint and all is healthy', async () => {
+            mockStdlib.getProvider.mockImplementation(() =>
                 Promise.resolve({
                     algodClient: { healthCheck: () => ({ do: async () => Promise.resolve({}) }) },
                     indexer: { makeHealthCheck: () => ({ do: async () => Promise.resolve({ version: '1.2.3' }) }) }
                 })
             )
 
-            mockLoadStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
 
             const response = await request(app.callback()).get('/hc')
             expect(response.status).toBe(200)
@@ -64,44 +66,15 @@ describe('app', function () {
             })
         })
 
-        it('should return 200 when calling hc endpoint on MainNet and all is healthy', async () => {
-            process.env.ENV = 'prod'
-
-            mockLoadStdlib.getProvider.mockImplementation(() =>
-                Promise.resolve({
-                    algodClient: { healthCheck: () => ({ do: async () => Promise.resolve({}) }) },
-                    indexer: { makeHealthCheck: () => ({ do: async () => Promise.resolve({ version: '1.2.3' }) }) }
-                })
-            )
-
-            mockLoadStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
-
-            const response = await request(app.callback()).get('/hc')
-            expect(response.status).toBe(200)
-            expect(response.status).toBe(200)
-            expect(response.body).toEqual({
-                env: 'prod',
-                region: 'local',
-                reach: {
-                    network: 'MainNet',
-                    algoClient: 'ok',
-                    algoIndexer: 'ok',
-                    algoAccount: 'ok'
-                }
-            })
-        })
-
-        it('should return 200 when calling hc endpoint on TestNet and algo client is faulty', async () => {
-            process.env.ENV = 'dev'
-
-            mockLoadStdlib.getProvider.mockImplementation(() =>
+        it('should return 200 when calling hc endpoint and algo client is faulty', async () => {
+            mockStdlib.getProvider.mockImplementation(() =>
                 Promise.resolve({
                     algodClient: { healthCheck: () => ({ do: async () => Promise.resolve({ error: 'error' }) }) },
                     indexer: { makeHealthCheck: () => ({ do: async () => Promise.resolve({ version: '1.2.3' }) }) }
                 })
             )
 
-            mockLoadStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
 
             const response = await request(app.callback()).get('/hc')
             expect(response.status).toBe(200)
@@ -118,17 +91,15 @@ describe('app', function () {
             })
         })
 
-        it('should return 200 when calling hc endpoint on TestNet and algo indexer is faulty', async () => {
-            process.env.ENV = 'dev'
-
-            mockLoadStdlib.getProvider.mockImplementation(() =>
+        it('should return 200 when calling hc endpoint and algo indexer is faulty', async () => {
+            mockStdlib.getProvider.mockImplementation(() =>
                 Promise.resolve({
                     algodClient: { healthCheck: () => ({ do: async () => Promise.resolve({}) }) },
                     indexer: { makeHealthCheck: () => ({ do: async () => Promise.resolve({}) }) }
                 })
             )
 
-            mockLoadStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
 
             const response = await request(app.callback()).get('/hc')
             expect(response.status).toBe(200)
@@ -145,17 +116,15 @@ describe('app', function () {
             })
         })
 
-        it('should return 200 when calling hc endpoint on TestNet and algo account is faulty', async () => {
-            process.env.ENV = 'dev'
-
-            mockLoadStdlib.getProvider.mockImplementation(() =>
+        it('should return 200 when calling hc endpoint and algo account is faulty', async () => {
+            mockStdlib.getProvider.mockImplementation(() =>
                 Promise.resolve({
                     algodClient: { healthCheck: () => ({ do: async () => Promise.resolve({}) }) },
                     indexer: { makeHealthCheck: () => ({ do: async () => Promise.resolve({ version: '1.2.3' }) }) }
                 })
             )
 
-            mockLoadStdlib.newAccountFromMnemonic.mockImplementation(() => ({}))
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({}))
 
             const response = await request(app.callback()).get('/hc')
             expect(response.status).toBe(200)
@@ -169,6 +138,33 @@ describe('app', function () {
                     algoIndexer: 'ok',
                     algoAccount: 'error'
                 }
+            })
+        })
+    })
+
+    describe('post project endpoint', function () {
+        it('should return 201 when posting new project and all is fine', async () => {
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
+            mockStdlib.launchToken.mockImplementation(() => ({ id: { toNumber: () => 1234 } }))
+
+            const response = await request(app.callback()).post('/project').send({})
+            expect(response.status).toBe(201)
+            expect(response.body).toEqual({
+                projectToken: 1234
+            })
+        })
+
+        it('should return 500 when launching token fails', async () => {
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
+            mockStdlib.launchToken.mockImplementation(() => {
+                throw new Error()
+            })
+
+            const response = await request(app.callback()).post('/project').send({})
+            expect(response.status).toBe(500)
+            expect(response.body).toEqual({
+                error: 'LaunchTokenError',
+                message: 'Unable to create project token'
             })
         })
     })

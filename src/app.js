@@ -3,9 +3,11 @@
 import dotenv from 'dotenv'
 import Koa from 'koa'
 import Router from '@koa/router'
+import bodyParser from 'koa-bodyparser'
 import errorHandler from './middleware/error-handler.js'
 import requestLogger from './middleware/request-logger.js'
-import { loadStdlib } from '@reach-sh/stdlib'
+import LaunchTokenError from './error/launchtoken.error.js'
+import ReachProvider from './provider/reach-provider.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -16,14 +18,9 @@ router.get('/', ctx => {
 })
 
 router.get('/hc', async ctx => {
-    const stdlib = loadStdlib({
-        ...process.env,
-        REACH_CONNECTOR_MODE: 'ALGO'
-    })
+    const reachProvider = new ReachProvider()
 
-    const env = process.env.ENV === 'prod' ? 'MainNet' : 'TestNet'
-
-    stdlib.setProviderByName(env)
+    const stdlib = reachProvider.getStdlib()
     const provider = await stdlib.getProvider()
 
     const [algoClientHC, algoIndexerHC, algoAccount] = await Promise.all([
@@ -32,8 +29,6 @@ router.get('/hc', async ctx => {
         stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC) // reach account handle
     ])
 
-    console.log(JSON.stringify(algoAccount, null, 4))
-
     const ok = 'ok'
     const error = 'error'
 
@@ -41,11 +36,24 @@ router.get('/hc', async ctx => {
         env: process.env.ENV,
         region: process.env.AWS_REGION,
         reach: {
-            network: env,
+            network: reachProvider.getEnv(),
             algoClient: JSON.stringify(algoClientHC) === '{}' ? ok : error,
             algoIndexer: algoIndexerHC.version ? ok : error,
             algoAccount: algoAccount.networkAccount ? ok : error
         }
+    }
+})
+
+router.post('/project', bodyParser(), async ctx => {
+    const stdlib = new ReachProvider().getStdlib()
+
+    try {
+        const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
+        const projectToken = await stdlib.launchToken(algoAccount, 'Terragrids Project', 'TRPRJ', { supply: 1, decimals: 0, url: 'https://terragrids.org', manager: process.env.ALGO_ACCOUNT_ADDRESS })
+        ctx.body = { projectToken: projectToken.id.toNumber() }
+        ctx.status = 201
+    } catch (e) {
+        throw new LaunchTokenError()
     }
 })
 
