@@ -2,8 +2,10 @@
 'use strict'
 
 /**
- * The Project Contract owns a project NFT which represents a Terragrids Creator's project.
- * Creators can update their project details by replacing the current NFT with a new one
+ * The Project Contract owns data fields which represent a Terragrids Creator's project.
+ * Data fields are 1/ the project name, 2/ a URL pointing to the IPFS location of the project metadata,
+ * and 3/ the metadata integrity hash. This is similar to the data stored in an ARC3 NFT.
+ * Creators can update their project details by replacing the current name or URL with new values
  * using the API exposed by this smart contract.
  */
 
@@ -11,43 +13,55 @@ export const main = Reach.App(() => {
     const A = Participant('Admin', {
         ...hasConsoleLogger,
         onReady: Fun(true, Null),
-        projectToken: Token
+        name: Bytes(128),
+        url: Bytes(128),
+        hash: Bytes(32)
     })
 
     const ProjectView = View('View', {
-        projectToken: Token
+        name: Bytes(128),
+        url: Bytes(128),
+        hash: Bytes(32)
     })
 
     const Api = API('Api', {
-        update: Fun([Token], Null),
+        updateName: Fun([Bytes(128)], Null),
+        updateMetadata: Fun([Bytes(128), Bytes(32)], Null),
         stop: Fun([], Bool)
     })
 
     init()
 
     A.only(() => {
-        const [projectToken] = declassify([interact.projectToken])
+        const [projectName, metadataUrl, metadataHash] = declassify([interact.name, interact.url, interact.hash])
     })
 
-    A.publish(projectToken)
-
-    require(balance(projectToken) == 0, 'NFT balance must be 0 at start')
+    A.publish(projectName, metadataUrl, metadataHash)
 
     A.interact.onReady(getContract())
     A.interact.log('The project contract is ready')
 
-    const [done, token] = parallelReduce([false, projectToken])
+    const [done, name, url, hash] = parallelReduce([false, projectName, metadataUrl, metadataHash])
         .define(() => {
-            ProjectView.projectToken.set(token)
+            ProjectView.name.set(name)
+            ProjectView.url.set(url)
+            ProjectView.hash.set(hash)
         })
-        .invariant(balance() == 0 && balance(projectToken) == 0)
+        .invariant(balance() == 0)
         .while(!done)
         /**
-         * Update project token
+         * Update project name
          */
-        .api(Api.update, (newToken, k) => {
+        .api(Api.updateName, (newName, k) => {
             k(null)
-            return [false, newToken]
+            return [false, newName, url, hash]
+        })
+        /**
+         * Update project metadata
+         */
+        .api(Api.updateMetadata, (newUrl, newHash, k) => {
+            k(null)
+            return [false, name, newUrl, newHash]
         })
         /**
          * Stops this contract
@@ -62,16 +76,12 @@ export const main = Reach.App(() => {
                 const isAdmin = this == A
                 require(isAdmin)
                 k(isAdmin)
-                return [true, token]
+                return [true, name, url, hash]
             }
         )
         .timeout(false)
 
-    require(balance(projectToken) == 0, 'NFT balance must be 0 at end')
-
     commit()
-
     A.interact.log('The project contract is closing down...')
-
     exit()
 })

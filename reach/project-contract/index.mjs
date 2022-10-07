@@ -60,70 +60,89 @@ const getAndLogBalance = async (account, name) => {
     return algo(balance)
 }
 
-const logProjectTokenAndAssert = async (name, view, expTokenId) => {
-    const projectTokenId = (await view.projectToken())[1].toNumber()
-    console.log(`${name} sees that project contract has token id ${projectTokenId}, expected ${expTokenId}`)
-    assert(projectTokenId === expTokenId)
+const logProjectAndAssert = async (accountName, view, expName, expUrl, expHash) => {
+    // eslint-disable-next-line no-control-regex
+    const removePadding = s => s.replace(/\x00/g, '')
+
+    const name = removePadding((await view.name())[1])
+    const url = removePadding((await view.url())[1])
+    const hash = removePadding((await view.hash())[1])
+    console.log(`${accountName} sees that project contract has name ${name}, expected ${expName}`)
+    console.log(`${accountName} sees that project contract has url ${url}, expected ${expUrl}`)
+    console.log(`${accountName} sees that project contract has hash ${hash}, expected ${expHash}`)
+    assert.equal(name, expName)
+    assert.equal(url, expUrl)
+    assert.equal(hash, expHash)
 }
 
-const userConnectAndStop = async (name, account, contract, startToken, ready) => {
+const userConnectAndStop = async (accountName, account, contract, prjName, prjUrl, prjHash, ready) => {
     return async () => {
-        console.log(`${name} is attaching to the contract...`)
+        console.log(`${accountName} is attaching to the contract...`)
         const ctc = account.contract(backend, contract.getInfo())
         const api = ctc.a.Api
         const view = ctc.v.View
 
-        console.log(`${name} has ${fmt(await stdlib.balanceOf(account))}`)
+        console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
 
         await ready.wait()
 
         // Initial state
 
-        await logProjectTokenAndAssert(name, view, startToken.id.toNumber())
+        await logProjectAndAssert(accountName, view, prjName, prjUrl, prjHash)
 
-        console.log(`${name} has ${fmt(await stdlib.balanceOf(account))}`)
+        console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
 
         // Stop the contract
 
-        console.log(`${name} is trying to stop the contract...`)
+        console.log(`${accountName} is trying to stop the contract...`)
 
-        await callAPI(name, () => api.stop(), `${name} managed to stop the contract`, `${name} failed to stop the contract`)
+        await callAPI(accountName, () => api.stop(), `${accountName} managed to stop the contract`, `${accountName} failed to stop the contract`)
 
-        console.log(`${name} has ${fmt(await stdlib.balanceOf(account))}`)
+        console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
     }
 }
 
-const userConnectUpdateAndStop = async (name, account, contract, startToken, ready) => {
+const userConnectUpdateAndStop = async (accountName, account, contract, prjName, prjUrl, prjHash, ready) => {
     return async () => {
-        console.log(`${name} is attaching to the contract...`)
+        console.log(`${accountName} is attaching to the contract...`)
         const ctc = account.contract(backend, contract.getInfo())
         const api = ctc.a.Api
         const view = ctc.v.View
 
-        console.log(`${name} has ${fmt(await stdlib.balanceOf(account))}`)
+        console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
 
         await ready.wait()
 
         // Initial state
 
-        await logProjectTokenAndAssert(name, view, startToken.id.toNumber())
+        await logProjectAndAssert(accountName, view, prjName, prjUrl, prjHash)
 
-        console.log(`${name} has ${fmt(await stdlib.balanceOf(account))}`)
+        console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
 
-        // Update token
-        const gol = await stdlib.launchToken(account, 'gold', 'GOL', { supply: 1, decimals: 0 })
+        // Update project name
 
-        await callAPI(name, () => api.update(gol.id), `${name} managed to update the project token`, `${name} failed to update the project token`)
+        await callAPI(accountName, () => api.updateName('project 2'), `${accountName} managed to update the project name`, `${accountName} failed to update the project name`)
 
-        await logProjectTokenAndAssert(name, view, gol.id.toNumber())
+        await logProjectAndAssert(accountName, view, 'project 2', prjUrl, prjHash)
+
+        // Update project metadata
+
+        await callAPI(
+            accountName,
+            () => api.updateMetadata('https://terragrids.org/project2', 'project_2_hash'),
+            `${accountName} managed to update the project name`,
+            `${accountName} failed to update the project name`
+        )
+
+        await logProjectAndAssert(accountName, view, 'project 2', 'https://terragrids.org/project2', 'project_2_hash')
 
         // Stop the contract
 
-        console.log(`${name} is trying to stop the contract...`)
+        console.log(`${accountName} is trying to stop the contract...`)
 
-        await callAPI(name, () => api.stop(), `${name} managed to stop the contract`, `${name} failed to stop the contract`)
+        await callAPI(accountName, () => api.stop(), `${accountName} managed to stop the contract`, `${accountName} failed to stop the contract`)
 
-        console.log(`${name} has ${fmt(await stdlib.balanceOf(account))}`)
+        console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
     }
 }
 
@@ -136,14 +155,16 @@ const deployAndStop = async () => {
 
     console.log('Deploying the contract...')
 
-    // Launch token
-    const gil = await stdlib.launchToken(accAdmin, 'gil', 'GIL', { supply: 1, decimals: 0 })
+    // Define initial project data
+    const name = 'project 1'
+    const url = 'https://terragrids.org/project1'
+    const hash = 'project_1_hash'
 
     // Deploy the dapp
     const ctcAdmin = accAdmin.contract(backend)
 
     await Promise.all([
-        thread(await userConnectAndStop('Admin', accAdmin, ctcAdmin, gil, ready)),
+        thread(await userConnectAndStop('Admin', accAdmin, ctcAdmin, name, url, hash, ready)),
         backend.Admin(ctcAdmin, {
             log: (...args) => {
                 console.log(...args)
@@ -154,7 +175,9 @@ const deployAndStop = async () => {
                 const adminAlgo = await stdlib.balanceOf(accAdmin)
                 console.log(`Admin has ${fmt(adminAlgo)}`)
             },
-            projectToken: gil.id
+            name,
+            url,
+            hash
         })
     ])
 
@@ -172,14 +195,16 @@ const deployUpdateAndStop = async () => {
 
     console.log('Deploying the contract...')
 
-    // Launch token
-    const gil = await stdlib.launchToken(accAdmin, 'gil', 'GIL', { supply: 1, decimals: 0 })
+    // Define initial project data
+    const name = 'project 1'
+    const url = 'https://terragrids.org/project1'
+    const hash = 'project_1_hash'
 
     // Deploy the dapp
     const ctcAdmin = accAdmin.contract(backend)
 
     await Promise.all([
-        thread(await userConnectUpdateAndStop('Admin', accAdmin, ctcAdmin, gil, ready)),
+        thread(await userConnectUpdateAndStop('Admin', accAdmin, ctcAdmin, name, url, hash, ready)),
         backend.Admin(ctcAdmin, {
             log: (...args) => {
                 console.log(...args)
@@ -190,7 +215,9 @@ const deployUpdateAndStop = async () => {
                 const adminAlgo = await stdlib.balanceOf(accAdmin)
                 console.log(`Admin has ${fmt(adminAlgo)}`)
             },
-            projectToken: gil.id
+            name,
+            url,
+            hash
         })
     ])
 
