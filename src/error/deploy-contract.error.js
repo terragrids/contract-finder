@@ -2,11 +2,11 @@ import GenericError from './generic-error.js'
 
 export default class DeployContractError extends GenericError {
     httpCode = 500
-    message
+    error
 
-    constructor(message) {
+    constructor(error) {
         super()
-        this.message = message
+        this.error = error
     }
 
     toJson() {
