@@ -1,6 +1,6 @@
 import GenericError from './generic-error.js'
 
-export default class LaunchTokenError extends GenericError {
+export default class DeployContractError extends GenericError {
     httpCode = 500
     message
 
@@ -11,8 +11,8 @@ export default class LaunchTokenError extends GenericError {
 
     toJson() {
         return {
-            error: 'LaunchTokenError',
-            message: 'Unable to create project token'
+            error: 'DeployContractError',
+            message: 'Unable to deploy project contract'
         }
     }
 }

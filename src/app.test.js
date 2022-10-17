@@ -4,8 +4,7 @@ import request from 'supertest'
 const mockStdlib = {
     setProviderByName: jest.fn().mockImplementation(() => jest.fn()),
     getProvider: jest.fn().mockImplementation(() => jest.fn()),
-    newAccountFromMnemonic: jest.fn().mockImplementation(() => jest.fn()),
-    launchToken: jest.fn().mockImplementation(() => jest.fn())
+    newAccountFromMnemonic: jest.fn().mockImplementation(() => jest.fn())
 }
 
 jest.mock('./provider/reach-provider.js', () =>
@@ -13,12 +12,13 @@ jest.mock('./provider/reach-provider.js', () =>
         getStdlib: jest.fn().mockImplementation(() => ({
             setProviderByName: mockStdlib.setProviderByName,
             getProvider: mockStdlib.getProvider,
-            newAccountFromMnemonic: mockStdlib.newAccountFromMnemonic,
-            launchToken: mockStdlib.launchToken
+            newAccountFromMnemonic: mockStdlib.newAccountFromMnemonic
         })),
         getEnv: jest.fn().mockImplementation(() => 'TestNet')
     }))
 )
+
+jest.mock('../reach/project-contract/build/index.main.mjs', () => jest.fn().mockImplementation(() => ({})))
 
 describe('app', function () {
     const OLD_ENV = process.env
@@ -144,27 +144,169 @@ describe('app', function () {
 
     describe('post project endpoint', function () {
         it('should return 201 when posting new project and all is fine', async () => {
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
-            mockStdlib.launchToken.mockImplementation(() => ({ id: { toNumber: () => 1234 } }))
+            const adminInterface = {
+                Admin: ({ log, onReady }) => {
+                    log('ready')
+                    onReady('contract')
+                }
+            }
+            const adminSpy = jest.spyOn(adminInterface, 'Admin')
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    p: adminInterface
+                })
+            }))
 
-            const response = await request(app.callback()).post('/project').send({})
+            const response = await request(app.callback()).post('/project').send({
+                name: 'project name',
+                url: 'project url',
+                hash: 'project hash'
+            })
+
+            expect(adminSpy).toHaveBeenCalledTimes(1)
+            expect(adminSpy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    name: 'project name',
+                    url: 'project url',
+                    hash: 'project hash'
+                })
+            )
+
             expect(response.status).toBe(201)
             expect(response.body).toEqual({
-                projectToken: 1234
+                contractInfo: 'ImNvbnRyYWN0Ig=='
             })
         })
 
-        it('should return 500 when launching token fails', async () => {
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
-            mockStdlib.launchToken.mockImplementation(() => {
-                throw new Error()
+        it('should return 500 when deploying contract fails', async () => {
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => {
+                    throw new Error()
+                }
+            }))
+
+            const response = await request(app.callback()).post('/project').send({
+                name: 'project name',
+                url: 'project url',
+                hash: 'project hash'
             })
 
-            const response = await request(app.callback()).post('/project').send({})
             expect(response.status).toBe(500)
             expect(response.body).toEqual({
-                error: 'LaunchTokenError',
-                message: 'Unable to create project token'
+                error: 'DeployContractError',
+                message: 'Unable to deploy project contract'
+            })
+        })
+
+        it('should return 500 when retrieving contract info fails', async () => {
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    p: {
+                        Admin: ({ onReady }) => onReady(/* undefined contract */)
+                    }
+                })
+            }))
+
+            const response = await request(app.callback()).post('/project').send({
+                name: 'project name',
+                url: 'project url',
+                hash: 'project hash'
+            })
+
+            expect(response.status).toBe(500)
+            expect(response.body).toEqual({
+                error: 'DeployContractError',
+                message: 'Unable to deploy project contract'
+            })
+        })
+
+        it('should return 400 when project name is missing', async () => {
+            const response = await request(app.callback()).post('/project').send({
+                url: 'project url',
+                hash: 'project hash'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'name must be specified'
+            })
+        })
+
+        it('should return 400 when project url is missing', async () => {
+            const response = await request(app.callback()).post('/project').send({
+                name: 'project name',
+                hash: 'project hash'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'url must be specified'
+            })
+        })
+
+        it('should return 400 when project hash is missing', async () => {
+            const response = await request(app.callback()).post('/project').send({
+                name: 'project name',
+                url: 'project url'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'hash must be specified'
+            })
+        })
+
+        it('should return 400 when project name is too long', async () => {
+            const response = await request(app.callback())
+                .post('/project')
+                .send({
+                    name: '#'.repeat(129),
+                    url: 'project url',
+                    hash: 'project hash'
+                })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ParameterTooLongError',
+                message: 'name is too long'
+            })
+        })
+
+        it('should return 400 when project url is too long', async () => {
+            const response = await request(app.callback())
+                .post('/project')
+                .send({
+                    name: 'project name',
+                    url: '#'.repeat(129),
+                    hash: 'project hash'
+                })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ParameterTooLongError',
+                message: 'url is too long'
+            })
+        })
+
+        it('should return 400 when project hash is too long', async () => {
+            const response = await request(app.callback())
+                .post('/project')
+                .send({
+                    name: 'project name',
+                    url: 'project url',
+                    hash: '#'.repeat(33)
+                })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ParameterTooLongError',
+                message: 'hash is too long'
             })
         })
     })

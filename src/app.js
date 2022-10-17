@@ -6,8 +6,13 @@ import Router from '@koa/router'
 import bodyParser from 'koa-bodyparser'
 import errorHandler from './middleware/error-handler.js'
 import requestLogger from './middleware/request-logger.js'
-import LaunchTokenError from './error/launchtoken.error.js'
+import DeployContractError from './error/deploy-contract.error.js'
 import ReachProvider from './provider/reach-provider.js'
+import * as backend from '../reach/project-contract/build/index.main.mjs'
+import { getJsonStringFromContract } from './utils/string-utils.js'
+import { createPromise } from './utils/promise.js'
+import MissingParameterError from './error/missing-parameter.error.js'
+import ParameterTooLongError from './error/parameter-too-long.error.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -45,15 +50,46 @@ router.get('/hc', async ctx => {
 })
 
 router.post('/project', bodyParser(), async ctx => {
+    if (!ctx.request.body.name) throw new MissingParameterError('name')
+    if (!ctx.request.body.url) throw new MissingParameterError('url')
+    if (!ctx.request.body.hash) throw new MissingParameterError('hash')
+
+    if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
+    if (ctx.request.body.url.length > 128) throw new ParameterTooLongError('url')
+    if (ctx.request.body.hash.length > 32) throw new ParameterTooLongError('hash')
+
     const stdlib = new ReachProvider().getStdlib()
 
     try {
         const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
-        const projectToken = await stdlib.launchToken(algoAccount, 'Terragrids Project', 'TRPRJ', { supply: 1, decimals: 0, url: 'https://terragrids.org', manager: process.env.ALGO_ACCOUNT_ADDRESS })
-        ctx.body = { projectToken: projectToken.id.toNumber() }
+
+        const { promise, succeed, fail } = createPromise()
+
+        try {
+            const contract = algoAccount.contract(backend)
+            contract.p.Admin({
+                log: () => {},
+                onReady: contract => {
+                    try {
+                        succeed(getJsonStringFromContract(contract))
+                    } catch (e) {
+                        fail(e)
+                    }
+                },
+                name: ctx.request.body.name,
+                url: ctx.request.body.url,
+                hash: ctx.request.body.hash
+            })
+        } catch (e) {
+            fail(e)
+        }
+
+        const contractInfo = await promise
+
+        ctx.body = { contractInfo }
         ctx.status = 201
     } catch (e) {
-        throw new LaunchTokenError()
+        throw new DeployContractError()
     }
 })
 
