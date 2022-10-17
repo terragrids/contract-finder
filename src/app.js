@@ -89,7 +89,7 @@ router.post('/project', bodyParser(), async ctx => {
         ctx.body = { contractInfo }
         ctx.status = 201
     } catch (e) {
-        throw new DeployContractError()
+        throw new DeployContractError(e.message)
     }
 })
 
