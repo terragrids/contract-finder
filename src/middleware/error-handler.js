@@ -10,6 +10,9 @@ export default async function errorHandler(ctx, next) {
         if (e instanceof GenericError) {
             if (e.error) {
                 logger.error(e.error.message)
+                if (e.stack) {
+                    logger.error(e.error.stack)
+                }
             }
             ctx.status = e.httpCode
             ctx.body = e.toJson()
