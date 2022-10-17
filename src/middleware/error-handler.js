@@ -10,7 +10,7 @@ export default async function errorHandler(ctx, next) {
         if (e instanceof GenericError) {
             if (e.error) {
                 logger.error(e.error.message)
-                if (e.stack) {
+                if (e.error.stack) {
                     logger.error(e.error.stack)
                 }
             }
