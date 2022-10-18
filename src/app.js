@@ -13,6 +13,7 @@ import { getJsonStringFromContract } from './utils/string-utils.js'
 import { createPromise } from './utils/promise.js'
 import MissingParameterError from './error/missing-parameter.error.js'
 import ParameterTooLongError from './error/parameter-too-long.error.js'
+import AddressMalformedError from './error/address-malformed.error.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -53,12 +54,20 @@ router.post('/project', bodyParser(), async ctx => {
     if (!ctx.request.body.name) throw new MissingParameterError('name')
     if (!ctx.request.body.url) throw new MissingParameterError('url')
     if (!ctx.request.body.hash) throw new MissingParameterError('hash')
+    if (!ctx.request.body.creator) throw new MissingParameterError('creator')
 
     if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
     if (ctx.request.body.url.length > 128) throw new ParameterTooLongError('url')
     if (ctx.request.body.hash.length > 32) throw new ParameterTooLongError('hash')
+    if (ctx.request.body.creator.length > 64) throw new ParameterTooLongError('creator')
 
     const stdlib = new ReachProvider().getStdlib()
+
+    try {
+        stdlib.protect(stdlib.T_Address, ctx.request.body.creator)
+    } catch (e) {
+        throw new AddressMalformedError(e)
+    }
 
     try {
         const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
@@ -78,7 +87,8 @@ router.post('/project', bodyParser(), async ctx => {
                 },
                 name: ctx.request.body.name,
                 url: ctx.request.body.url,
-                hash: ctx.request.body.hash
+                hash: ctx.request.body.hash,
+                creator: ctx.request.body.creator
             })
         } catch (e) {
             fail(e)

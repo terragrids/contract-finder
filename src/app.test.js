@@ -4,7 +4,8 @@ import request from 'supertest'
 const mockStdlib = {
     setProviderByName: jest.fn().mockImplementation(() => jest.fn()),
     getProvider: jest.fn().mockImplementation(() => jest.fn()),
-    newAccountFromMnemonic: jest.fn().mockImplementation(() => jest.fn())
+    newAccountFromMnemonic: jest.fn().mockImplementation(() => jest.fn()),
+    protect: jest.fn().mockImplementation(() => jest.fn())
 }
 
 jest.mock('./provider/reach-provider.js', () =>
@@ -12,7 +13,8 @@ jest.mock('./provider/reach-provider.js', () =>
         getStdlib: jest.fn().mockImplementation(() => ({
             setProviderByName: mockStdlib.setProviderByName,
             getProvider: mockStdlib.getProvider,
-            newAccountFromMnemonic: mockStdlib.newAccountFromMnemonic
+            newAccountFromMnemonic: mockStdlib.newAccountFromMnemonic,
+            protect: mockStdlib.protect
         })),
         getEnv: jest.fn().mockImplementation(() => 'TestNet')
     }))
@@ -143,6 +145,10 @@ describe('app', function () {
     })
 
     describe('post project endpoint', function () {
+        beforeEach(() => {
+            mockStdlib.protect.mockImplementation(() => {})
+        })
+
         it('should return 201 when posting new project and all is fine', async () => {
             const adminInterface = {
                 Admin: ({ log, onReady }) => {
@@ -161,7 +167,8 @@ describe('app', function () {
             const response = await request(app.callback()).post('/project').send({
                 name: 'project name',
                 url: 'project url',
-                hash: 'project hash'
+                hash: 'project hash',
+                creator: 'project creator'
             })
 
             expect(adminSpy).toHaveBeenCalledTimes(1)
@@ -169,7 +176,8 @@ describe('app', function () {
                 expect.objectContaining({
                     name: 'project name',
                     url: 'project url',
-                    hash: 'project hash'
+                    hash: 'project hash',
+                    creator: 'project creator'
                 })
             )
 
@@ -190,7 +198,8 @@ describe('app', function () {
             const response = await request(app.callback()).post('/project').send({
                 name: 'project name',
                 url: 'project url',
-                hash: 'project hash'
+                hash: 'project hash',
+                creator: 'project creator'
             })
 
             expect(response.status).toBe(500)
@@ -213,7 +222,8 @@ describe('app', function () {
             const response = await request(app.callback()).post('/project').send({
                 name: 'project name',
                 url: 'project url',
-                hash: 'project hash'
+                hash: 'project hash',
+                creator: 'project creator'
             })
 
             expect(response.status).toBe(500)
@@ -226,7 +236,8 @@ describe('app', function () {
         it('should return 400 when project name is missing', async () => {
             const response = await request(app.callback()).post('/project').send({
                 url: 'project url',
-                hash: 'project hash'
+                hash: 'project hash',
+                creator: 'project creator'
             })
 
             expect(response.status).toBe(400)
@@ -239,7 +250,8 @@ describe('app', function () {
         it('should return 400 when project url is missing', async () => {
             const response = await request(app.callback()).post('/project').send({
                 name: 'project name',
-                hash: 'project hash'
+                hash: 'project hash',
+                creator: 'project creator'
             })
 
             expect(response.status).toBe(400)
@@ -252,7 +264,8 @@ describe('app', function () {
         it('should return 400 when project hash is missing', async () => {
             const response = await request(app.callback()).post('/project').send({
                 name: 'project name',
-                url: 'project url'
+                url: 'project url',
+                creator: 'project creator'
             })
 
             expect(response.status).toBe(400)
@@ -262,13 +275,28 @@ describe('app', function () {
             })
         })
 
+        it('should return 400 when project creator is missing', async () => {
+            const response = await request(app.callback()).post('/project').send({
+                name: 'project name',
+                url: 'project url',
+                hash: 'project hash'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'creator must be specified'
+            })
+        })
+
         it('should return 400 when project name is too long', async () => {
             const response = await request(app.callback())
                 .post('/project')
                 .send({
                     name: '#'.repeat(129),
                     url: 'project url',
-                    hash: 'project hash'
+                    hash: 'project hash',
+                    creator: 'project creator'
                 })
 
             expect(response.status).toBe(400)
@@ -284,7 +312,8 @@ describe('app', function () {
                 .send({
                     name: 'project name',
                     url: '#'.repeat(129),
-                    hash: 'project hash'
+                    hash: 'project hash',
+                    creator: 'project creator'
                 })
 
             expect(response.status).toBe(400)
@@ -300,13 +329,50 @@ describe('app', function () {
                 .send({
                     name: 'project name',
                     url: 'project url',
-                    hash: '#'.repeat(33)
+                    hash: '#'.repeat(33),
+                    creator: 'project creator'
                 })
 
             expect(response.status).toBe(400)
             expect(response.body).toEqual({
                 error: 'ParameterTooLongError',
                 message: 'hash is too long'
+            })
+        })
+
+        it('should return 400 when project creator is too long', async () => {
+            const response = await request(app.callback())
+                .post('/project')
+                .send({
+                    name: 'project name',
+                    url: 'project url',
+                    hash: 'project hash',
+                    creator: '#'.repeat(65)
+                })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ParameterTooLongError',
+                message: 'creator is too long'
+            })
+        })
+
+        it('should return 400 when project creator is malformed', async () => {
+            mockStdlib.protect.mockImplementation(() => {
+                throw new Error()
+            })
+
+            const response = await request(app.callback()).post('/project').send({
+                name: 'project name',
+                url: 'project url',
+                hash: 'project hash',
+                creator: 'project creator'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'AddressMalformedError',
+                message: 'The specified address is malformed'
             })
         })
     })
