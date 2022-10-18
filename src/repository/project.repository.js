@@ -8,7 +8,7 @@ export default class ProjectRepository extends DynamoDbRepository {
         return await this.put({
             item: {
                 pk: { S: `${this.projectPrefix}|${contractInfo}` },
-                creator: { S: creator }
+                creator: { S: `${this.creatorPrefix}|${creator}` }
             },
             itemLogName: 'project'
         })

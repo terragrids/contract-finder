@@ -15,6 +15,7 @@ import MissingParameterError from './error/missing-parameter.error.js'
 import ParameterTooLongError from './error/parameter-too-long.error.js'
 import AddressMalformedError from './error/address-malformed.error.js'
 import DynamoDbRepository from './repository/dynamodb.repository.js'
+import ProjectRepository from './repository/project.repository.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -84,9 +85,11 @@ router.post('/project', bodyParser(), async ctx => {
             const contract = algoAccount.contract(backend)
             contract.p.Admin({
                 log: () => {},
-                onReady: contract => {
+                onReady: async contract => {
                     try {
-                        succeed(getJsonStringFromContract(contract))
+                        const contractInfo = getJsonStringFromContract(contract)
+                        await new ProjectRepository().createProject(contractInfo, ctx.request.body.creator)
+                        succeed(contractInfo)
                     } catch (e) {
                         fail(e)
                     }

@@ -29,6 +29,15 @@ jest.mock('./repository/dynamodb.repository.js', () =>
     }))
 )
 
+const mockProjectRepository = {
+    createProject: jest.fn().mockImplementation(() => jest.fn())
+}
+jest.mock('./repository/project.repository.js', () =>
+    jest.fn().mockImplementation(() => ({
+        createProject: mockProjectRepository.createProject
+    }))
+)
+
 jest.mock('../reach/project-contract/build/index.main.mjs', () => jest.fn().mockImplementation(() => ({})))
 
 describe('app', function () {
@@ -270,6 +279,9 @@ describe('app', function () {
                 })
             )
 
+            expect(mockProjectRepository.createProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.createProject).toHaveBeenCalledWith('ImNvbnRyYWN0Ig==', 'project creator')
+
             expect(response.status).toBe(201)
             expect(response.body).toEqual({
                 contractInfo: 'ImNvbnRyYWN0Ig=='
@@ -304,6 +316,37 @@ describe('app', function () {
                 contract: () => ({
                     p: {
                         Admin: ({ onReady }) => onReady(/* undefined contract */)
+                    }
+                })
+            }))
+
+            const response = await request(app.callback()).post('/project').send({
+                name: 'project name',
+                url: 'project url',
+                hash: 'project hash',
+                creator: 'project creator'
+            })
+
+            expect(response.status).toBe(500)
+            expect(response.body).toEqual({
+                error: 'DeployContractError',
+                message: 'Unable to deploy project contract'
+            })
+        })
+
+        it('should return 500 when saving contract in repository fails', async () => {
+            mockProjectRepository.createProject.mockImplementation(() => {
+                throw new Error()
+            })
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    p: {
+                        Admin: ({ log, onReady }) => {
+                            log('ready')
+                            onReady('contract')
+                        }
                     }
                 })
             }))
