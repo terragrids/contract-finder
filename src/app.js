@@ -14,6 +14,7 @@ import { createPromise } from './utils/promise.js'
 import MissingParameterError from './error/missing-parameter.error.js'
 import ParameterTooLongError from './error/parameter-too-long.error.js'
 import AddressMalformedError from './error/address-malformed.error.js'
+import DynamoDbRepository from './repository/dynamodb.repository.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -29,10 +30,11 @@ router.get('/hc', async ctx => {
     const stdlib = reachProvider.getStdlib()
     const provider = await stdlib.getProvider()
 
-    const [algoClientHC, algoIndexerHC, algoAccount] = await Promise.all([
+    const [algoClientHC, algoIndexerHC, algoAccount, dynamoDb] = await Promise.all([
         provider.algodClient.healthCheck().do(), // algo sdk client
         provider.indexer.makeHealthCheck().do(), // algo indexer client
-        stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC) // reach account handle
+        stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC), // reach account handle
+        new DynamoDbRepository().testConnection() // DynamoDB client
     ])
 
     const ok = 'ok'
@@ -41,6 +43,10 @@ router.get('/hc', async ctx => {
     ctx.body = {
         env: process.env.ENV,
         region: process.env.AWS_REGION,
+        db: {
+            status: dynamoDb.status === 200 ? ok : error,
+            region: dynamoDb.region
+        },
         reach: {
             network: reachProvider.getEnv(),
             algoClient: JSON.stringify(algoClientHC) === '{}' ? ok : error,

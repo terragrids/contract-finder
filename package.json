@@ -18,6 +18,7 @@
     },
     "homepage": "https://github.com/terragrids/project-contract-api#readme",
     "dependencies": {
+        "@aws-sdk/client-dynamodb": "^3.190.0",
         "@koa/router": "^12.0.0",
         "@reach-sh/stdlib": "^0.1.12-rc.1",
         "dotenv": "^16.0.2",

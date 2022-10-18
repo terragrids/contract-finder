@@ -20,6 +20,15 @@ jest.mock('./provider/reach-provider.js', () =>
     }))
 )
 
+const mockDynamoDbRepository = {
+    testConnection: jest.fn().mockImplementation(() => jest.fn())
+}
+jest.mock('./repository/dynamodb.repository.js', () =>
+    jest.fn().mockImplementation(() => ({
+        testConnection: mockDynamoDbRepository.testConnection
+    }))
+)
+
 jest.mock('../reach/project-contract/build/index.main.mjs', () => jest.fn().mockImplementation(() => ({})))
 
 describe('app', function () {
@@ -51,6 +60,13 @@ describe('app', function () {
                 })
             )
 
+            mockDynamoDbRepository.testConnection.mockImplementation(() =>
+                Promise.resolve({
+                    status: 200,
+                    region: 'test-region'
+                })
+            )
+
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
 
             const response = await request(app.callback()).get('/hc')
@@ -59,6 +75,10 @@ describe('app', function () {
             expect(response.body).toEqual({
                 env: 'dev',
                 region: 'local',
+                db: {
+                    status: 'ok',
+                    region: 'test-region'
+                },
                 reach: {
                     network: 'TestNet',
                     algoClient: 'ok',
@@ -76,6 +96,13 @@ describe('app', function () {
                 })
             )
 
+            mockDynamoDbRepository.testConnection.mockImplementation(() =>
+                Promise.resolve({
+                    status: 200,
+                    region: 'test-region'
+                })
+            )
+
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
 
             const response = await request(app.callback()).get('/hc')
@@ -84,6 +111,10 @@ describe('app', function () {
             expect(response.body).toEqual({
                 env: 'dev',
                 region: 'local',
+                db: {
+                    status: 'ok',
+                    region: 'test-region'
+                },
                 reach: {
                     network: 'TestNet',
                     algoClient: 'error',
@@ -101,6 +132,13 @@ describe('app', function () {
                 })
             )
 
+            mockDynamoDbRepository.testConnection.mockImplementation(() =>
+                Promise.resolve({
+                    status: 200,
+                    region: 'test-region'
+                })
+            )
+
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
 
             const response = await request(app.callback()).get('/hc')
@@ -109,6 +147,10 @@ describe('app', function () {
             expect(response.body).toEqual({
                 env: 'dev',
                 region: 'local',
+                db: {
+                    status: 'ok',
+                    region: 'test-region'
+                },
                 reach: {
                     network: 'TestNet',
                     algoClient: 'ok',
@@ -126,6 +168,13 @@ describe('app', function () {
                 })
             )
 
+            mockDynamoDbRepository.testConnection.mockImplementation(() =>
+                Promise.resolve({
+                    status: 200,
+                    region: 'test-region'
+                })
+            )
+
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({}))
 
             const response = await request(app.callback()).get('/hc')
@@ -134,11 +183,51 @@ describe('app', function () {
             expect(response.body).toEqual({
                 env: 'dev',
                 region: 'local',
+                db: {
+                    status: 'ok',
+                    region: 'test-region'
+                },
                 reach: {
                     network: 'TestNet',
                     algoClient: 'ok',
                     algoIndexer: 'ok',
                     algoAccount: 'error'
+                }
+            })
+        })
+
+        it('should return 200 when calling hc endpoint and db in faulty', async () => {
+            mockStdlib.getProvider.mockImplementation(() =>
+                Promise.resolve({
+                    algodClient: { healthCheck: () => ({ do: async () => Promise.resolve({}) }) },
+                    indexer: { makeHealthCheck: () => ({ do: async () => Promise.resolve({ version: '1.2.3' }) }) }
+                })
+            )
+
+            mockDynamoDbRepository.testConnection.mockImplementation(() =>
+                Promise.resolve({
+                    status: 500,
+                    region: 'test-region'
+                })
+            )
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({ networkAccount: {} }))
+
+            const response = await request(app.callback()).get('/hc')
+            expect(response.status).toBe(200)
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                env: 'dev',
+                region: 'local',
+                db: {
+                    status: 'error',
+                    region: 'test-region'
+                },
+                reach: {
+                    network: 'TestNet',
+                    algoClient: 'ok',
+                    algoIndexer: 'ok',
+                    algoAccount: 'ok'
                 }
             })
         })
