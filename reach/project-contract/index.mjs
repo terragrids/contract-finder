@@ -45,13 +45,9 @@ const callAPI = async (name, f, successMsg, failureMsg) => {
     return result
 }
 
-const setup = async () => {
+const createTestAccount = async () => {
     const startingBalance = stdlib.parseCurrency(100)
-
-    // Create test accounts
-    const accAdmin = await stdlib.newTestAccount(startingBalance)
-
-    return accAdmin
+    return await stdlib.newTestAccount(startingBalance)
 }
 
 const getAndLogBalance = async (account, name) => {
@@ -60,22 +56,25 @@ const getAndLogBalance = async (account, name) => {
     return algo(balance)
 }
 
-const logProjectAndAssert = async (accountName, view, expName, expUrl, expHash) => {
+const logProjectAndAssert = async (accountName, view, expName, expUrl, expHash, expCreator) => {
     // eslint-disable-next-line no-control-regex
     const removePadding = s => s.replace(/\x00/g, '')
 
     const name = removePadding((await view.name())[1])
     const url = removePadding((await view.url())[1])
     const hash = removePadding((await view.hash())[1])
+    const creator = stdlib.formatAddress((await view.creator())[1])
     console.log(`${accountName} sees that project contract has name ${name}, expected ${expName}`)
     console.log(`${accountName} sees that project contract has url ${url}, expected ${expUrl}`)
     console.log(`${accountName} sees that project contract has hash ${hash}, expected ${expHash}`)
+    console.log(`${accountName} sees that project creator is ${creator}, expected ${expCreator}`)
     assert.equal(name, expName)
     assert.equal(url, expUrl)
     assert.equal(hash, expHash)
+    assert.equal(creator, expCreator)
 }
 
-const userConnectAndStop = async (accountName, account, contract, prjName, prjUrl, prjHash, ready) => {
+const userConnectAndStop = async (accountName, account, contract, prjName, prjUrl, prjHash, prjCreator, ready) => {
     return async () => {
         console.log(`${accountName} is attaching to the contract...`)
         const ctc = account.contract(backend, contract.getInfo())
@@ -88,7 +87,7 @@ const userConnectAndStop = async (accountName, account, contract, prjName, prjUr
 
         // Initial state
 
-        await logProjectAndAssert(accountName, view, prjName, prjUrl, prjHash)
+        await logProjectAndAssert(accountName, view, prjName, prjUrl, prjHash, prjCreator)
 
         console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
 
@@ -102,7 +101,7 @@ const userConnectAndStop = async (accountName, account, contract, prjName, prjUr
     }
 }
 
-const userConnectUpdateAndStop = async (accountName, account, contract, prjName, prjUrl, prjHash, ready) => {
+const userConnectUpdateAndStop = async (accountName, account, contract, prjName, prjUrl, prjHash, prjCreator, ready) => {
     return async () => {
         console.log(`${accountName} is attaching to the contract...`)
         const ctc = account.contract(backend, contract.getInfo())
@@ -115,7 +114,7 @@ const userConnectUpdateAndStop = async (accountName, account, contract, prjName,
 
         // Initial state
 
-        await logProjectAndAssert(accountName, view, prjName, prjUrl, prjHash)
+        await logProjectAndAssert(accountName, view, prjName, prjUrl, prjHash, prjCreator)
 
         console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
 
@@ -123,18 +122,18 @@ const userConnectUpdateAndStop = async (accountName, account, contract, prjName,
 
         await callAPI(accountName, () => api.updateName('project 2'), `${accountName} managed to update the project name`, `${accountName} failed to update the project name`)
 
-        await logProjectAndAssert(accountName, view, 'project 2', prjUrl, prjHash)
+        await logProjectAndAssert(accountName, view, 'project 2', prjUrl, prjHash, prjCreator)
 
         // Update project metadata
 
         await callAPI(
             accountName,
             () => api.updateMetadata('https://terragrids.org/project2', 'project_2_hash'),
-            `${accountName} managed to update the project name`,
-            `${accountName} failed to update the project name`
+            `${accountName} managed to update the project metadata`,
+            `${accountName} failed to update the project metadata`
         )
 
-        await logProjectAndAssert(accountName, view, 'project 2', 'https://terragrids.org/project2', 'project_2_hash')
+        await logProjectAndAssert(accountName, view, 'project 2', 'https://terragrids.org/project2', 'project_2_hash', prjCreator)
 
         // Stop the contract
 
@@ -146,9 +145,10 @@ const userConnectUpdateAndStop = async (accountName, account, contract, prjName,
     }
 }
 
-const deployAndStop = async () => {
-    console.log('>> Deploy and stop')
-    const accAdmin = await setup()
+const runTestCase = async testCase => {
+    console.log(`>> Test case: ${testCase}`)
+    const accAdmin = await createTestAccount()
+    const accCreator = await createTestAccount()
     const ready = new Signal()
 
     await getAndLogBalance(accAdmin, 'Admin')
@@ -159,12 +159,25 @@ const deployAndStop = async () => {
     const name = 'project 1'
     const url = 'https://terragrids.org/project1'
     const hash = 'project_1_hash'
+    const creator = stdlib.formatAddress(accCreator.getAddress())
+    console.log(`Creator address ${creator}`)
 
     // Deploy the dapp
     const ctcAdmin = accAdmin.contract(backend)
 
+    let testRun
+    switch (testCase) {
+        default:
+        case 'CONNECT_STOP':
+            testRun = userConnectAndStop
+            break
+        case 'CONNECT_UPDATE_STOP':
+            testRun = userConnectUpdateAndStop
+            break
+    }
+
     await Promise.all([
-        thread(await userConnectAndStop('Admin', accAdmin, ctcAdmin, name, url, hash, ready)),
+        thread(await testRun('Admin', accAdmin, ctcAdmin, name, url, hash, creator, ready)),
         backend.Admin(ctcAdmin, {
             log: (...args) => {
                 console.log(...args)
@@ -177,7 +190,8 @@ const deployAndStop = async () => {
             },
             name,
             url,
-            hash
+            hash,
+            creator
         })
     ])
 
@@ -186,45 +200,5 @@ const deployAndStop = async () => {
     assert(parseFloat(adminAlgo) < 100)
 }
 
-const deployUpdateAndStop = async () => {
-    console.log('>> Deploy, update project token and stop')
-    const accAdmin = await setup()
-    const ready = new Signal()
-
-    await getAndLogBalance(accAdmin, 'Admin')
-
-    console.log('Deploying the contract...')
-
-    // Define initial project data
-    const name = 'project 1'
-    const url = 'https://terragrids.org/project1'
-    const hash = 'project_1_hash'
-
-    // Deploy the dapp
-    const ctcAdmin = accAdmin.contract(backend)
-
-    await Promise.all([
-        thread(await userConnectUpdateAndStop('Admin', accAdmin, ctcAdmin, name, url, hash, ready)),
-        backend.Admin(ctcAdmin, {
-            log: (...args) => {
-                console.log(...args)
-                ready.notify()
-            },
-            onReady: async contract => {
-                console.log(`Contract deployed ${JSON.stringify(contract)}`)
-                const adminAlgo = await stdlib.balanceOf(accAdmin)
-                console.log(`Admin has ${fmt(adminAlgo)}`)
-            },
-            name,
-            url,
-            hash
-        })
-    ])
-
-    console.log('Contract stopped.')
-    const adminAlgo = await getAndLogBalance(accAdmin, 'Admin')
-    assert(parseFloat(adminAlgo) < 100)
-}
-
-await deployAndStop()
-await deployUpdateAndStop()
+await runTestCase('CONNECT_STOP')
+await runTestCase('CONNECT_UPDATE_STOP')
