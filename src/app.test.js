@@ -5,7 +5,9 @@ const mockStdlib = {
     setProviderByName: jest.fn().mockImplementation(() => jest.fn()),
     getProvider: jest.fn().mockImplementation(() => jest.fn()),
     newAccountFromMnemonic: jest.fn().mockImplementation(() => jest.fn()),
-    protect: jest.fn().mockImplementation(() => jest.fn())
+    createAccount: jest.fn().mockImplementation(() => jest.fn()),
+    protect: jest.fn().mockImplementation(() => jest.fn()),
+    formatAddress: jest.fn().mockImplementation(() => jest.fn())
 }
 
 jest.mock('./provider/reach-provider.js', () =>
@@ -14,7 +16,9 @@ jest.mock('./provider/reach-provider.js', () =>
             setProviderByName: mockStdlib.setProviderByName,
             getProvider: mockStdlib.getProvider,
             newAccountFromMnemonic: mockStdlib.newAccountFromMnemonic,
-            protect: mockStdlib.protect
+            createAccount: mockStdlib.createAccount,
+            protect: mockStdlib.protect,
+            formatAddress: mockStdlib.formatAddress
         })),
         getEnv: jest.fn().mockImplementation(() => 'TestNet')
     }))
@@ -30,11 +34,13 @@ jest.mock('./repository/dynamodb.repository.js', () =>
 )
 
 const mockProjectRepository = {
-    createProject: jest.fn().mockImplementation(() => jest.fn())
+    createProject: jest.fn().mockImplementation(() => jest.fn()),
+    getProject: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/project.repository.js', () =>
     jest.fn().mockImplementation(() => ({
-        createProject: mockProjectRepository.createProject
+        createProject: mockProjectRepository.createProject,
+        getProject: mockProjectRepository.getProject
     }))
 )
 
@@ -505,6 +511,71 @@ describe('app', function () {
             expect(response.body).toEqual({
                 error: 'AddressMalformedError',
                 message: 'The specified address is malformed'
+            })
+        })
+    })
+
+    describe('get project endpoint', function () {
+        beforeEach(() => {
+            mockStdlib.formatAddress.mockImplementation(address => `formatted ${address}`)
+        })
+
+        it('should return 200 when getting project and all is fine', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                creator: 'creator'
+            }))
+
+            const view = {
+                View: {
+                    name: () => [0, 'project name'],
+                    url: () => [0, 'project url'],
+                    hash: () => [0, 'project hash'],
+                    creator: () => [0, 'project creator']
+                }
+            }
+
+            mockStdlib.createAccount.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    v: view
+                })
+            }))
+
+            const response = await request(app.callback()).get('/projects/contract-id')
+
+            expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                creator: 'formatted project creator',
+                name: 'project name',
+                hash: 'project hash',
+                url: 'project url'
+            })
+        })
+
+        it('should return 500 when getting project and create account fails', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                creator: 'creator'
+            }))
+
+            mockStdlib.createAccount.mockImplementation(() => {
+                throw new Error()
+            })
+
+            const response = await request(app.callback()).get('/projects/contract-id')
+
+            expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+
+            expect(response.status).toBe(500)
+            expect(response.body).toEqual({
+                error: 'ReadContractError',
+                message: 'Unable to read project contract'
             })
         })
     })

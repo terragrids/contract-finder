@@ -1,4 +1,4 @@
-import { DescribeTableCommand, DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb'
+import { ConditionalCheckFailedException, DescribeTableCommand, DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb'
 import RepositoryError from '../error/repository.error.js'
 import Logger from '../logging/logger.js'
 
@@ -42,6 +42,21 @@ export default class DynamoDbRepository {
             return await this.client.send(command)
         } catch (e) {
             throw new RepositoryError(e, `Unable to put ${itemLogName}`)
+        }
+    }
+
+    async get({ key, itemLogName = 'item' }) {
+        const params = {
+            TableName: this.table,
+            Key: key
+        }
+        const command = new GetItemCommand(params)
+
+        try {
+            return await this.client.send(command)
+        } catch (e) {
+            if (e instanceof ConditionalCheckFailedException) throw e
+            throw new RepositoryError(e, `Unable to get ${itemLogName}`)
         }
     }
 }

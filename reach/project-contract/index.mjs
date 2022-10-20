@@ -87,7 +87,7 @@ const userConnectAndStop = async (accountName, account, contract, prjName, prjUr
 
         // Initial state
 
-        await logProjectAndAssert(accountName, view, prjName, prjUrl, prjHash, prjCreator)
+        await logProjectAndalgoAccountAssert(accountName, view, prjName, prjUrl, prjHash, prjCreator)
 
         console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
 

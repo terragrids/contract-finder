@@ -9,13 +9,14 @@ import requestLogger from './middleware/request-logger.js'
 import DeployContractError from './error/deploy-contract.error.js'
 import ReachProvider from './provider/reach-provider.js'
 import * as backend from '../reach/project-contract/build/index.main.mjs'
-import { getJsonStringFromContract } from './utils/string-utils.js'
+import { getContractFromJsonString, getJsonStringFromContract, removePadding } from './utils/string-utils.js'
 import { createPromise } from './utils/promise.js'
 import MissingParameterError from './error/missing-parameter.error.js'
 import ParameterTooLongError from './error/parameter-too-long.error.js'
 import AddressMalformedError from './error/address-malformed.error.js'
 import DynamoDbRepository from './repository/dynamodb.repository.js'
 import ProjectRepository from './repository/project.repository.js'
+import ReadContractError from './error/read-contract.error.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -87,9 +88,9 @@ router.post('/project', bodyParser(), async ctx => {
                 log: () => {},
                 onReady: async contract => {
                     try {
-                        const contractInfo = getJsonStringFromContract(contract)
-                        await new ProjectRepository().createProject(contractInfo, ctx.request.body.creator)
-                        succeed(contractInfo)
+                        const contractId = getJsonStringFromContract(contract)
+                        await new ProjectRepository().createProject(contractId, ctx.request.body.creator)
+                        succeed(contractId)
                     } catch (e) {
                         fail(e)
                     }
@@ -109,6 +110,29 @@ router.post('/project', bodyParser(), async ctx => {
         ctx.status = 201
     } catch (e) {
         throw new DeployContractError(e)
+    }
+})
+
+router.get('/projects/:contractId', async ctx => {
+    const project = await new ProjectRepository().getProject(ctx.params.contractId)
+
+    try {
+        const stdlib = new ReachProvider().getStdlib()
+        const algoAccount = await stdlib.createAccount()
+
+        const infoObject = getContractFromJsonString(project.id)
+        const contract = algoAccount.contract(backend, infoObject)
+        const view = contract.v.View
+
+        // We need to read different view parameters sequentially
+        const name = removePadding((await view.name())[1])
+        const url = removePadding((await view.url())[1])
+        const hash = removePadding((await view.hash())[1])
+        const creator = stdlib.formatAddress((await view.creator())[1])
+
+        ctx.body = { id: project.id, creator, name, hash, url }
+    } catch (e) {
+        throw new ReadContractError(e)
     }
 })
 
