@@ -136,4 +136,15 @@ router.get('/projects/:contractId', async ctx => {
     }
 })
 
+router.get('/creators/:creatorId/projects', async ctx => {
+    const projects = await new ProjectRepository().getProjectsByCreator({
+        creator: ctx.params.creatorId,
+        sort: ctx.request.query.sort,
+        pageSize: ctx.request.query.pageSize,
+        nextPageKey: ctx.request.query.nextPageKey
+    })
+    ctx.body = projects
+    ctx.status = 200
+})
+
 app.use(requestLogger).use(errorHandler).use(router.routes()).use(router.allowedMethods())

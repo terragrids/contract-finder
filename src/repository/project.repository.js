@@ -38,4 +38,28 @@ export default class ProjectRepository extends DynamoDbRepository {
             else throw e
         }
     }
+
+    async getProjectsByCreator({ creator, pageSize, nextPageKey, sort }) {
+        const forward = sort && sort === 'desc' ? false : true
+        const data = await this.query({
+            indexName: 'gsi1',
+            conditionExpression: 'gsi1pk = :gsi1pk AND begins_with(#data, :type)',
+            attributeNames: { '#data': 'data' },
+            attributeValues: {
+                ':gsi1pk': { S: `user|${creator}` },
+                ':type': { S: 'project|' }
+            },
+            pageSize,
+            nextPageKey,
+            forward
+        })
+
+        return {
+            projects: data.Items.map(project => ({
+                id: project.pk.S.replace('project|', ''),
+                created: project.data.S.split('|')[2]
+            })),
+            ...(data.nextPageKey && { nextPageKey: data.nextPageKey })
+        }
+    }
 }

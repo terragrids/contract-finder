@@ -35,12 +35,14 @@ jest.mock('./repository/dynamodb.repository.js', () =>
 
 const mockProjectRepository = {
     createProject: jest.fn().mockImplementation(() => jest.fn()),
-    getProject: jest.fn().mockImplementation(() => jest.fn())
+    getProject: jest.fn().mockImplementation(() => jest.fn()),
+    getProjectsByCreator: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/project.repository.js', () =>
     jest.fn().mockImplementation(() => ({
         createProject: mockProjectRepository.createProject,
-        getProject: mockProjectRepository.getProject
+        getProject: mockProjectRepository.getProject,
+        getProjectsByCreator: mockProjectRepository.getProjectsByCreator
     }))
 )
 
@@ -578,6 +580,47 @@ describe('app', function () {
             expect(response.body).toEqual({
                 error: 'ReadContractError',
                 message: 'Unable to read project contract'
+            })
+        })
+    })
+
+    describe('get projects endpoint', function () {
+        it('should return 200 when getting project and all is fine', async () => {
+            mockProjectRepository.getProjectsByCreator.mockImplementation(() => ({
+                projects: [
+                    {
+                        id: 'contract-id-1',
+                        created: 'contract-date-1'
+                    },
+                    {
+                        id: 'contract-id-2',
+                        created: 'contract-date-2'
+                    }
+                ]
+            }))
+
+            const response = await request(app.callback()).get('/creators/creator-id/projects?sort=asc&pageSize=12&nextPageKey=page-key')
+
+            expect(mockProjectRepository.getProjectsByCreator).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.getProjectsByCreator).toHaveBeenCalledWith({
+                creator: 'creator-id',
+                sort: 'asc',
+                nextPageKey: 'page-key',
+                pageSize: '12'
+            })
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                projects: [
+                    {
+                        id: 'contract-id-1',
+                        created: 'contract-date-1'
+                    },
+                    {
+                        id: 'contract-id-2',
+                        created: 'contract-date-2'
+                    }
+                ]
             })
         })
     })

@@ -1,4 +1,4 @@
-import { ConditionalCheckFailedException, DescribeTableCommand, DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb'
+import { ConditionalCheckFailedException, DescribeTableCommand, DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
 import RepositoryError from '../error/repository.error.js'
 import Logger from '../logging/logger.js'
 
@@ -57,6 +57,27 @@ export default class DynamoDbRepository {
         } catch (e) {
             if (e instanceof ConditionalCheckFailedException) throw e
             throw new RepositoryError(e, `Unable to get ${itemLogName}`)
+        }
+    }
+
+    async query({ indexName, conditionExpression, attributeNames, attributeValues, pageSize = 10, nextPageKey, forward = true, itemLogName = 'item' }) {
+        const params = {
+            TableName: this.table,
+            IndexName: indexName,
+            KeyConditionExpression: conditionExpression,
+            ExpressionAttributeNames: attributeNames,
+            ExpressionAttributeValues: attributeValues,
+            Limit: pageSize,
+            ExclusiveStartKey: nextPageKey ? JSON.parse(Buffer.from(nextPageKey, 'base64').toString('ascii')) : null,
+            ScanIndexForward: forward
+        }
+
+        const command = new QueryCommand(params)
+
+        try {
+            return await this.client.send(command)
+        } catch (e) {
+            throw new RepositoryError(e, `Unable to query ${itemLogName}`)
         }
     }
 }
