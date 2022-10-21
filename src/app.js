@@ -130,7 +130,7 @@ router.get('/projects/:contractId', async ctx => {
         const hash = removePadding((await view.hash())[1])
         const creator = stdlib.formatAddress((await view.creator())[1])
 
-        ctx.body = { id: project.id, creator, name, hash, url }
+        ctx.body = { ...project, creator, name, hash, url }
     } catch (e) {
         throw new ReadContractError(e)
     }

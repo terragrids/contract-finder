@@ -523,6 +523,7 @@ describe('app', function () {
         it('should return 200 when getting project and all is fine', async () => {
             mockProjectRepository.getProject.mockImplementation(() => ({
                 id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                created: 'creation-date',
                 creator: 'creator'
             }))
 
@@ -551,6 +552,7 @@ describe('app', function () {
             expect(response.body).toEqual({
                 id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
                 creator: 'formatted project creator',
+                created: 'creation-date',
                 name: 'project name',
                 hash: 'project hash',
                 url: 'project url'

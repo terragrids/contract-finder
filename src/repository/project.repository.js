@@ -12,7 +12,8 @@ export default class ProjectRepository extends DynamoDbRepository {
             item: {
                 pk: { S: `${this.projectPrefix}|${contractId}` },
                 gsi1pk: { S: `${this.userPrefix}|${creator}` },
-                gsi2pk: { S: `type|${this.itemName}` }
+                gsi2pk: { S: `type|${this.itemName}` },
+                data: { S: `${this.itemName}|created|${Date.now()}` }
             },
             itemLogName: this.itemName
         })
@@ -28,7 +29,8 @@ export default class ProjectRepository extends DynamoDbRepository {
             return data.Item
                 ? {
                       id: contractId,
-                      creator: data.Item.gsi1pk.S.replace(`${this.userPrefix}|`, '')
+                      creator: data.Item.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
+                      created: data.Item.data.S.replace(`${this.itemName}|created|`, '')
                   }
                 : null
         } catch (e) {
