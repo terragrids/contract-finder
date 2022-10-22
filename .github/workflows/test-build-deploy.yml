@@ -62,4 +62,4 @@ jobs:
                   function_name: terragridsProjectContractApiDev
                   handler: src/serverless.handler
                   memory_size: 256
-                  timeout: 10
+                  timeout: 60
