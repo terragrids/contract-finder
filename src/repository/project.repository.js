@@ -26,13 +26,15 @@ export default class ProjectRepository extends DynamoDbRepository {
                 itemLogName: this.itemName
             })
 
-            return data.Item
-                ? {
-                      id: contractId,
-                      creator: data.Item.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
-                      created: data.Item.data.S.replace(`${this.itemName}|created|`, '')
-                  }
-                : null
+            if (data.Item) {
+                return {
+                    id: contractId,
+                    creator: data.Item.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
+                    created: data.Item.data.S.replace(`${this.itemName}|created|`, '')
+                }
+            }
+
+            throw new ProjectNotFoundError()
         } catch (e) {
             if (e instanceof ConditionalCheckFailedException) throw new ProjectNotFoundError()
             else throw e

@@ -17,6 +17,7 @@ import AddressMalformedError from './error/address-malformed.error.js'
 import DynamoDbRepository from './repository/dynamodb.repository.js'
 import ProjectRepository from './repository/project.repository.js'
 import ReadContractError from './error/read-contract.error.js'
+import UpdateContractError from './error/update-contract.error.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -110,6 +111,36 @@ router.post('/project', bodyParser(), async ctx => {
         ctx.status = 201
     } catch (e) {
         throw new DeployContractError(e)
+    }
+})
+
+router.put('/projects/:contractId', bodyParser(), async ctx => {
+    ctx.body = ''
+    if (!ctx.request.body.name && !ctx.request.body.url && !ctx.request.body.hash) {
+        ctx.status = 204
+        return
+    }
+
+    if (ctx.request.body.url && !ctx.request.body.hash) throw new MissingParameterError('hash')
+    if (ctx.request.body.hash && !ctx.request.body.url) throw new MissingParameterError('url')
+
+    if (ctx.request.body.name && ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
+    if (ctx.request.body.url && ctx.request.body.url.length > 128) throw new ParameterTooLongError('url')
+    if (ctx.request.body.hash && ctx.request.body.hash.length > 32) throw new ParameterTooLongError('hash')
+
+    const project = await new ProjectRepository().getProject(ctx.params.contractId)
+
+    try {
+        const stdlib = new ReachProvider().getStdlib()
+        const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
+        const infoObject = getContractFromJsonString(project.id)
+        const contract = algoAccount.contract(backend, infoObject)
+        const api = contract.a.Api
+        if (ctx.request.body.name) await api.updateName(ctx.request.body.name)
+        if (ctx.request.body.url && ctx.request.body.hash) await api.updateMetadata(ctx.request.body.url, ctx.request.body.hash)
+        ctx.status = 204
+    } catch (e) {
+        throw new UpdateContractError(e)
     }
 })
 

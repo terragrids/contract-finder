@@ -517,6 +517,378 @@ describe('app', function () {
         })
     })
 
+    describe('update project endpoint', function () {
+        it('should return 204 when updating all project properties and all is fine', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            }))
+
+            const contractApi = {
+                Api: {
+                    updateName: jest.fn().mockImplementation(async () => Promise.resolve()),
+                    updateMetadata: jest.fn().mockImplementation(async () => Promise.resolve())
+                }
+            }
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: contractApi
+                })
+            }))
+
+            const response = await request(app.callback()).put('/projects/contract-id').send({
+                name: 'project name',
+                url: 'project url',
+                hash: 'project hash'
+            })
+
+            expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+
+            expect(contractApi.Api.updateName).toHaveBeenCalledTimes(1)
+            expect(contractApi.Api.updateName).toHaveBeenCalledWith('project name')
+
+            expect(contractApi.Api.updateMetadata).toHaveBeenCalledTimes(1)
+            expect(contractApi.Api.updateMetadata).toHaveBeenCalledWith('project url', 'project hash')
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
+        it('should return 204 when updating project name and all is fine', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            }))
+
+            const contractApi = {
+                Api: {
+                    updateName: jest.fn().mockImplementation(async () => Promise.resolve()),
+                    updateMetadata: jest.fn().mockImplementation(async () => Promise.resolve())
+                }
+            }
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: contractApi
+                })
+            }))
+
+            const response = await request(app.callback()).put('/projects/contract-id').send({
+                name: 'project name'
+            })
+
+            expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+
+            expect(contractApi.Api.updateName).toHaveBeenCalledTimes(1)
+            expect(contractApi.Api.updateName).toHaveBeenCalledWith('project name')
+
+            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
+        it('should return 204 when updating project metadata and all is fine', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            }))
+
+            const contractApi = {
+                Api: {
+                    updateName: jest.fn().mockImplementation(async () => Promise.resolve()),
+                    updateMetadata: jest.fn().mockImplementation(async () => Promise.resolve())
+                }
+            }
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: contractApi
+                })
+            }))
+
+            const response = await request(app.callback()).put('/projects/contract-id').send({
+                url: 'project url',
+                hash: 'project hash'
+            })
+
+            expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+
+            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
+
+            expect(contractApi.Api.updateMetadata).toHaveBeenCalledTimes(1)
+            expect(contractApi.Api.updateMetadata).toHaveBeenCalledWith('project url', 'project hash')
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
+        it('should return 204 when updating no project properties', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            }))
+
+            const contractApi = {
+                Api: {
+                    updateName: jest.fn(),
+                    updateMetadata: jest.fn()
+                }
+            }
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: contractApi
+                })
+            }))
+
+            const response = await request(app.callback()).put('/projects/contract-id')
+
+            expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
+        it('should return 400 when updating url project property without hash', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            }))
+
+            const contractApi = {
+                Api: {
+                    updateName: jest.fn(),
+                    updateMetadata: jest.fn()
+                }
+            }
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: contractApi
+                })
+            }))
+
+            const response = await request(app.callback()).put('/projects/contract-id').send({
+                url: 'url'
+            })
+
+            expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'hash must be specified'
+            })
+        })
+
+        it('should return 400 when updating hash project property without url', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            }))
+
+            const contractApi = {
+                Api: {
+                    updateName: jest.fn(),
+                    updateMetadata: jest.fn()
+                }
+            }
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: contractApi
+                })
+            }))
+
+            const response = await request(app.callback()).put('/projects/contract-id').send({
+                hash: 'hash'
+            })
+
+            expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'url must be specified'
+            })
+        })
+
+        it('should return 400 when updating too long name project property', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            }))
+
+            const contractApi = {
+                Api: {
+                    updateName: jest.fn(),
+                    updateMetadata: jest.fn()
+                }
+            }
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: contractApi
+                })
+            }))
+
+            const response = await request(app.callback())
+                .put('/projects/contract-id')
+                .send({
+                    name: '#'.repeat(129)
+                })
+
+            expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ParameterTooLongError',
+                message: 'name is too long'
+            })
+        })
+
+        it('should return 400 when updating too long url project property', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            }))
+
+            const contractApi = {
+                Api: {
+                    updateName: jest.fn(),
+                    updateMetadata: jest.fn()
+                }
+            }
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: contractApi
+                })
+            }))
+
+            const response = await request(app.callback())
+                .put('/projects/contract-id')
+                .send({
+                    url: '#'.repeat(129),
+                    hash: 'hash'
+                })
+
+            expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ParameterTooLongError',
+                message: 'url is too long'
+            })
+        })
+
+        it('should return 400 when updating too long hash project property', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            }))
+
+            const contractApi = {
+                Api: {
+                    updateName: jest.fn(),
+                    updateMetadata: jest.fn()
+                }
+            }
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: contractApi
+                })
+            }))
+
+            const response = await request(app.callback())
+                .put('/projects/contract-id')
+                .send({
+                    url: 'url',
+                    hash: '#'.repeat(33)
+                })
+
+            expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ParameterTooLongError',
+                message: 'hash is too long'
+            })
+        })
+
+        it('should return 500 when updating project name fails', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            }))
+
+            const contractApi = {
+                Api: {
+                    updateName: jest.fn().mockImplementation(() => {
+                        throw new Error()
+                    }),
+                    updateMetadata: jest.fn()
+                }
+            }
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: contractApi
+                })
+            }))
+
+            const response = await request(app.callback()).put('/projects/contract-id').send({
+                name: 'name'
+            })
+
+            expect(response.status).toBe(500)
+            expect(response.body).toEqual({
+                error: 'UpdateContractError',
+                message: 'Unable to update project contract'
+            })
+        })
+
+        it('should return 500 when updating project metadata fails', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            }))
+
+            const contractApi = {
+                Api: {
+                    updateName: jest.fn(),
+                    updateMetadata: jest.fn().mockImplementation(() => {
+                        throw new Error()
+                    })
+                }
+            }
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: contractApi
+                })
+            }))
+
+            const response = await request(app.callback()).put('/projects/contract-id').send({
+                url: 'url',
+                hash: 'hash'
+            })
+
+            expect(response.status).toBe(500)
+            expect(response.body).toEqual({
+                error: 'UpdateContractError',
+                message: 'Unable to update project contract'
+            })
+        })
+    })
+
     describe('get project endpoint', function () {
         beforeEach(() => {
             mockStdlib.formatAddress.mockImplementation(address => `formatted ${address}`)
