@@ -93,7 +93,7 @@ router.post('/projects', bodyParser(), async ctx => {
                         const contractId = getJsonStringFromContract(contract)
                         await new ProjectRepository().createProject({
                             contractId,
-                            projectName: ctx.request.body.name,
+                            name: ctx.request.body.name,
                             offChainImageUrl: ctx.request.body.offChainImageUrl,
                             creator: ctx.request.body.creator
                         })

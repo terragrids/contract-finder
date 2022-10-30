@@ -292,7 +292,7 @@ describe('app', function () {
             expect(mockProjectRepository.createProject).toHaveBeenCalledWith({
                 contractId: 'ImNvbnRyYWN0Ig==',
                 creator: 'project creator',
-                projectName: 'project name',
+                name: 'project name',
                 offChainImageUrl: 'image url'
             })
 

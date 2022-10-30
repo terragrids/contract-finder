@@ -7,14 +7,14 @@ export default class ProjectRepository extends DynamoDbRepository {
     userPrefix = 'user'
     itemName = 'project'
 
-    async createProject({ contractId, projectName, offChainImageUrl, creator }) {
+    async createProject({ contractId, name, offChainImageUrl, creator }) {
         return await this.put({
             item: {
                 pk: { S: `${this.projectPrefix}|${contractId}` },
                 gsi1pk: { S: `${this.userPrefix}|${creator}` },
                 gsi2pk: { S: `type|${this.itemName}` },
                 data: { S: `${this.itemName}|created|${Date.now()}` },
-                projectName: { S: projectName },
+                name: { S: name },
                 offChainImageUrl: { S: offChainImageUrl }
             },
             itemLogName: this.itemName
@@ -32,7 +32,8 @@ export default class ProjectRepository extends DynamoDbRepository {
                 return {
                     id: contractId,
                     creator: data.Item.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
-                    created: data.Item.data.S.replace(`${this.itemName}|created|`, '')
+                    created: data.Item.data.S.replace(`${this.itemName}|created|`, ''),
+                    ...(data.Item.offChainImageUrl && data.Item.offChainImageUrl.S && { offChainImageUrl: data.Item.offChainImageUrl.S })
                 }
             }
 
@@ -61,7 +62,9 @@ export default class ProjectRepository extends DynamoDbRepository {
         return {
             projects: data.Items.map(project => ({
                 id: project.pk.S.replace('project|', ''),
-                created: project.data.S.split('|')[2]
+                created: project.data.S.split('|')[2],
+                ...(project.name && { name: project.name.S }),
+                ...(project.offChainImageUrl && { offChainImageUrl: project.offChainImageUrl.S })
             })),
             ...(data.nextPageKey && { nextPageKey: data.nextPageKey })
         }
