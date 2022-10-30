@@ -19,20 +19,20 @@ export const main = Reach.App(() => {
         onReady: Fun(true, Null),
         name: Bytes(128),
         url: Bytes(128),
-        hash: Bytes(32),
+        hash: Bytes(64),
         creator: Address
     })
 
     const ProjectView = View('View', {
         name: Bytes(128),
         url: Bytes(128),
-        hash: Bytes(32),
+        hash: Bytes(64),
         creator: Address
     })
 
     const Api = API('Api', {
         updateName: Fun([Bytes(128)], Null),
-        updateMetadata: Fun([Bytes(128), Bytes(32)], Null),
+        updateMetadata: Fun([Bytes(128), Bytes(64)], Null),
         stop: Fun([], Bool)
     })
 

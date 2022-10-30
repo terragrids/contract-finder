@@ -68,7 +68,7 @@ router.post('/projects', bodyParser(), async ctx => {
     if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
     if (ctx.request.body.url.length > 128) throw new ParameterTooLongError('url')
     if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
-    if (ctx.request.body.hash.length > 32) throw new ParameterTooLongError('hash')
+    if (ctx.request.body.hash.length > 64) throw new ParameterTooLongError('hash')
     if (ctx.request.body.creator.length > 64) throw new ParameterTooLongError('creator')
 
     const stdlib = new ReachProvider().getStdlib()
@@ -132,7 +132,7 @@ router.put('/projects/:contractId', bodyParser(), async ctx => {
 
     if (ctx.request.body.name && ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
     if (ctx.request.body.url && ctx.request.body.url.length > 128) throw new ParameterTooLongError('url')
-    if (ctx.request.body.hash && ctx.request.body.hash.length > 32) throw new ParameterTooLongError('hash')
+    if (ctx.request.body.hash && ctx.request.body.hash.length > 64) throw new ParameterTooLongError('hash')
 
     const project = await new ProjectRepository().getProject(ctx.params.contractId)
 

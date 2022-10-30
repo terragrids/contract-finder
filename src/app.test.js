@@ -493,7 +493,7 @@ describe('app', function () {
                 .send({
                     name: 'project name',
                     url: 'project url',
-                    hash: '#'.repeat(33),
+                    hash: '#'.repeat(65),
                     creator: 'project creator'
                 })
 
@@ -835,7 +835,7 @@ describe('app', function () {
                 .put('/projects/contract-id')
                 .send({
                     url: 'url',
-                    hash: '#'.repeat(33)
+                    hash: '#'.repeat(65)
                 })
 
             expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
