@@ -270,7 +270,7 @@ describe('app', function () {
                 })
             }))
 
-            const response = await request(app.callback()).post('/project').send({
+            const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
                 url: 'project url',
                 hash: 'project hash',
@@ -304,7 +304,7 @@ describe('app', function () {
                 }
             }))
 
-            const response = await request(app.callback()).post('/project').send({
+            const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
                 url: 'project url',
                 hash: 'project hash',
@@ -328,7 +328,7 @@ describe('app', function () {
                 })
             }))
 
-            const response = await request(app.callback()).post('/project').send({
+            const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
                 url: 'project url',
                 hash: 'project hash',
@@ -359,7 +359,7 @@ describe('app', function () {
                 })
             }))
 
-            const response = await request(app.callback()).post('/project').send({
+            const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
                 url: 'project url',
                 hash: 'project hash',
@@ -374,7 +374,7 @@ describe('app', function () {
         })
 
         it('should return 400 when project name is missing', async () => {
-            const response = await request(app.callback()).post('/project').send({
+            const response = await request(app.callback()).post('/projects').send({
                 url: 'project url',
                 hash: 'project hash',
                 creator: 'project creator'
@@ -388,7 +388,7 @@ describe('app', function () {
         })
 
         it('should return 400 when project url is missing', async () => {
-            const response = await request(app.callback()).post('/project').send({
+            const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
                 hash: 'project hash',
                 creator: 'project creator'
@@ -402,7 +402,7 @@ describe('app', function () {
         })
 
         it('should return 400 when project hash is missing', async () => {
-            const response = await request(app.callback()).post('/project').send({
+            const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
                 url: 'project url',
                 creator: 'project creator'
@@ -416,7 +416,7 @@ describe('app', function () {
         })
 
         it('should return 400 when project creator is missing', async () => {
-            const response = await request(app.callback()).post('/project').send({
+            const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
                 url: 'project url',
                 hash: 'project hash'
@@ -431,7 +431,7 @@ describe('app', function () {
 
         it('should return 400 when project name is too long', async () => {
             const response = await request(app.callback())
-                .post('/project')
+                .post('/projects')
                 .send({
                     name: '#'.repeat(129),
                     url: 'project url',
@@ -448,7 +448,7 @@ describe('app', function () {
 
         it('should return 400 when project url is too long', async () => {
             const response = await request(app.callback())
-                .post('/project')
+                .post('/projects')
                 .send({
                     name: 'project name',
                     url: '#'.repeat(129),
@@ -465,7 +465,7 @@ describe('app', function () {
 
         it('should return 400 when project hash is too long', async () => {
             const response = await request(app.callback())
-                .post('/project')
+                .post('/projects')
                 .send({
                     name: 'project name',
                     url: 'project url',
@@ -482,7 +482,7 @@ describe('app', function () {
 
         it('should return 400 when project creator is too long', async () => {
             const response = await request(app.callback())
-                .post('/project')
+                .post('/projects')
                 .send({
                     name: 'project name',
                     url: 'project url',
@@ -502,7 +502,7 @@ describe('app', function () {
                 throw new Error()
             })
 
-            const response = await request(app.callback()).post('/project').send({
+            const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
                 url: 'project url',
                 hash: 'project hash',

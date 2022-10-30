@@ -59,7 +59,7 @@ router.get('/hc', async ctx => {
     }
 })
 
-router.post('/project', bodyParser(), async ctx => {
+router.post('/projects', bodyParser(), async ctx => {
     if (!ctx.request.body.name) throw new MissingParameterError('name')
     if (!ctx.request.body.url) throw new MissingParameterError('url')
     if (!ctx.request.body.hash) throw new MissingParameterError('hash')
