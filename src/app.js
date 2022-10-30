@@ -67,6 +67,7 @@ router.post('/projects', bodyParser(), async ctx => {
 
     if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
     if (ctx.request.body.url.length > 128) throw new ParameterTooLongError('url')
+    if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
     if (ctx.request.body.hash.length > 32) throw new ParameterTooLongError('hash')
     if (ctx.request.body.creator.length > 64) throw new ParameterTooLongError('creator')
 
@@ -90,7 +91,12 @@ router.post('/projects', bodyParser(), async ctx => {
                 onReady: async contract => {
                     try {
                         const contractId = getJsonStringFromContract(contract)
-                        await new ProjectRepository().createProject(contractId, ctx.request.body.creator)
+                        await new ProjectRepository().createProject({
+                            contractId,
+                            projectName: ctx.request.body.name,
+                            offChainImageUrl: ctx.request.body.offChainImageUrl,
+                            creator: ctx.request.body.creator
+                        })
                         succeed(contractId)
                     } catch (e) {
                         fail(e)

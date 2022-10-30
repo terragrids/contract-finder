@@ -274,7 +274,8 @@ describe('app', function () {
                 name: 'project name',
                 url: 'project url',
                 hash: 'project hash',
-                creator: 'project creator'
+                creator: 'project creator',
+                offChainImageUrl: 'image url'
             })
 
             expect(adminSpy).toHaveBeenCalledTimes(1)
@@ -288,7 +289,12 @@ describe('app', function () {
             )
 
             expect(mockProjectRepository.createProject).toHaveBeenCalledTimes(1)
-            expect(mockProjectRepository.createProject).toHaveBeenCalledWith('ImNvbnRyYWN0Ig==', 'project creator')
+            expect(mockProjectRepository.createProject).toHaveBeenCalledWith({
+                contractId: 'ImNvbnRyYWN0Ig==',
+                creator: 'project creator',
+                projectName: 'project name',
+                offChainImageUrl: 'image url'
+            })
 
             expect(response.status).toBe(201)
             expect(response.body).toEqual({
@@ -460,6 +466,24 @@ describe('app', function () {
             expect(response.body).toEqual({
                 error: 'ParameterTooLongError',
                 message: 'url is too long'
+            })
+        })
+
+        it('should return 400 when off-chain project image url is too long', async () => {
+            const response = await request(app.callback())
+                .post('/projects')
+                .send({
+                    name: 'project name',
+                    url: 'project url',
+                    offChainImageUrl: '#'.repeat(129),
+                    hash: 'project hash',
+                    creator: 'project creator'
+                })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ParameterTooLongError',
+                message: 'offChainImageUrl is too long'
             })
         })
 
