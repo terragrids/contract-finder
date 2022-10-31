@@ -18,6 +18,7 @@ import DynamoDbRepository from './repository/dynamodb.repository.js'
 import ProjectRepository from './repository/project.repository.js'
 import ReadContractError from './error/read-contract.error.js'
 import UpdateContractError from './error/update-contract.error.js'
+import authHandler from './middleware/auth-handler.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -59,7 +60,7 @@ router.get('/hc', async ctx => {
     }
 })
 
-router.post('/projects', bodyParser(), async ctx => {
+router.post('/projects', authHandler, bodyParser(), async ctx => {
     if (!ctx.request.body.name) throw new MissingParameterError('name')
     if (!ctx.request.body.url) throw new MissingParameterError('url')
     if (!ctx.request.body.hash) throw new MissingParameterError('hash')

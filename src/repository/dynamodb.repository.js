@@ -1,4 +1,4 @@
-import { ConditionalCheckFailedException, DescribeTableCommand, DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
+import { ConditionalCheckFailedException, DeleteItemCommand, DescribeTableCommand, DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
 import RepositoryError from '../error/repository.error.js'
 import Logger from '../logging/logger.js'
 
@@ -78,6 +78,22 @@ export default class DynamoDbRepository {
             return await this.client.send(command)
         } catch (e) {
             throw new RepositoryError(e, `Unable to query ${itemLogName}`)
+        }
+    }
+
+    async delete({ key, itemLogName = 'item' }) {
+        const params = {
+            TableName: this.table,
+            Key: key,
+            ConditionExpression: 'attribute_exists(pk)'
+        }
+        const command = new DeleteItemCommand(params)
+
+        try {
+            return await this.client.send(command)
+        } catch (e) {
+            if (e instanceof ConditionalCheckFailedException) throw e
+            else throw new RepositoryError(e, `Unable to delete ${itemLogName}`)
         }
     }
 }

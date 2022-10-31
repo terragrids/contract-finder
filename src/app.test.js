@@ -48,6 +48,12 @@ jest.mock('./repository/project.repository.js', () =>
 
 jest.mock('../reach/project-contract/build/index.main.mjs', () => jest.fn().mockImplementation(() => ({})))
 
+jest.mock('./middleware/auth-handler.js', () =>
+    jest.fn().mockImplementation(async (ctx, next) => {
+        await next()
+    })
+)
+
 describe('app', function () {
     const OLD_ENV = process.env
 
