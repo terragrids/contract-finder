@@ -44,6 +44,22 @@ export default class ProjectRepository extends DynamoDbRepository {
         }
     }
 
+    async updateProject({ contractId, name, offChainImageUrl }) {
+        try {
+            await this.update({
+                key: { pk: { S: `${this.projectPrefix}|${contractId}` } },
+                attributes: {
+                    ...(name && { '#name': { S: name } }),
+                    ...(offChainImageUrl && { offChainImageUrl: { S: offChainImageUrl } })
+                },
+                itemLogName: this.itemName
+            })
+        } catch (e) {
+            if (e instanceof ConditionalCheckFailedException) throw new ProjectNotFoundError()
+            else throw e
+        }
+    }
+
     async getProjectsByCreator({ creator, pageSize, nextPageKey, sort }) {
         const forward = sort && sort === 'desc' ? false : true
         const data = await this.query({

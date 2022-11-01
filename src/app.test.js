@@ -35,12 +35,14 @@ jest.mock('./repository/dynamodb.repository.js', () =>
 
 const mockProjectRepository = {
     createProject: jest.fn().mockImplementation(() => jest.fn()),
+    updateProject: jest.fn().mockImplementation(() => jest.fn()),
     getProject: jest.fn().mockImplementation(() => jest.fn()),
     getProjectsByCreator: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/project.repository.js', () =>
     jest.fn().mockImplementation(() => ({
         createProject: mockProjectRepository.createProject,
+        updateProject: mockProjectRepository.updateProject,
         getProject: mockProjectRepository.getProject,
         getProjectsByCreator: mockProjectRepository.getProjectsByCreator
     }))
@@ -444,7 +446,7 @@ describe('app', function () {
 
         it('should return 403 when project creator is not the authenticated user', async () => {
             authHandler.mockImplementation(async (ctx, next) => {
-                ctx.state.account = 'project meh creator'
+                ctx.state.account = 'bogus user'
                 await next()
             })
 
@@ -571,7 +573,8 @@ describe('app', function () {
     describe('update project endpoint', function () {
         it('should return 204 when updating all project properties and all is fine', async () => {
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                creator: 'project creator'
             }))
 
             const contractApi = {
@@ -590,11 +593,19 @@ describe('app', function () {
             const response = await request(app.callback()).put('/projects/contract-id').send({
                 name: 'project name',
                 url: 'project url',
-                hash: 'project hash'
+                hash: 'project hash',
+                offChainImageUrl: 'off-chain url'
             })
 
             expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
             expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+
+            expect(mockProjectRepository.updateProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.updateProject).toHaveBeenCalledWith({
+                contractId: 'contract-id',
+                name: 'project name',
+                offChainImageUrl: 'off-chain url'
+            })
 
             expect(contractApi.Api.updateName).toHaveBeenCalledTimes(1)
             expect(contractApi.Api.updateName).toHaveBeenCalledWith('project name')
@@ -608,7 +619,8 @@ describe('app', function () {
 
         it('should return 204 when updating project name and all is fine', async () => {
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                creator: 'project creator'
             }))
 
             const contractApi = {
@@ -642,7 +654,8 @@ describe('app', function () {
 
         it('should return 204 when updating project metadata and all is fine', async () => {
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                creator: 'project creator'
             }))
 
             const contractApi = {
@@ -677,7 +690,8 @@ describe('app', function () {
 
         it('should return 204 when updating no project properties', async () => {
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                creator: 'project creator'
             }))
 
             const contractApi = {
@@ -701,6 +715,51 @@ describe('app', function () {
 
             expect(response.status).toBe(204)
             expect(response.body).toEqual({})
+        })
+
+        it('should return 403 when updating project with unauthorized user', async () => {
+            authHandler.mockImplementation(async (ctx, next) => {
+                ctx.state.account = 'bogus user'
+                await next()
+            })
+
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                creator: 'project creator'
+            }))
+
+            const contractApi = {
+                Api: {
+                    updateName: jest.fn(),
+                    updateMetadata: jest.fn()
+                }
+            }
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: contractApi
+                })
+            }))
+
+            const response = await request(app.callback()).put('/projects/contract-id').send({
+                name: 'project name',
+                url: 'project url',
+                hash: 'project hash',
+                offChainImageUrl: 'off-chain url'
+            })
+
+            expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+
+            expect(mockProjectRepository.updateProject).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(403)
+            expect(response.body).toEqual({
+                error: 'UserUnauthorizedError',
+                message: 'The authenticated user is not authorized to perform this action'
+            })
         })
 
         it('should return 400 when updating url project property without hash', async () => {
@@ -804,6 +863,41 @@ describe('app', function () {
             })
         })
 
+        it('should return 400 when updating too long off-chain url project property', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            }))
+
+            const contractApi = {
+                Api: {
+                    updateName: jest.fn(),
+                    updateMetadata: jest.fn()
+                }
+            }
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: contractApi
+                })
+            }))
+
+            const response = await request(app.callback())
+                .put('/projects/contract-id')
+                .send({
+                    offChainImageUrl: '#'.repeat(129)
+                })
+
+            expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
+            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ParameterTooLongError',
+                message: 'offChainImageUrl is too long'
+            })
+        })
+
         it('should return 400 when updating too long url project property', async () => {
             mockProjectRepository.getProject.mockImplementation(() => ({
                 id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
@@ -878,7 +972,8 @@ describe('app', function () {
 
         it('should return 500 when updating project name fails', async () => {
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                creator: 'project creator'
             }))
 
             const contractApi = {
@@ -909,7 +1004,8 @@ describe('app', function () {
 
         it('should return 500 when updating project metadata fails', async () => {
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                creator: 'project creator'
             }))
 
             const contractApi = {

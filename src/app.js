@@ -123,9 +123,9 @@ router.post('/projects', authHandler, bodyParser(), async ctx => {
     }
 })
 
-router.put('/projects/:contractId', bodyParser(), async ctx => {
+router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
     ctx.body = ''
-    if (!ctx.request.body.name && !ctx.request.body.url && !ctx.request.body.hash) {
+    if (!ctx.request.body.name && !ctx.request.body.url && !ctx.request.body.hash && !ctx.request.body.offChainImageUrl) {
         ctx.status = 204
         return
     }
@@ -136,8 +136,12 @@ router.put('/projects/:contractId', bodyParser(), async ctx => {
     if (ctx.request.body.name && ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
     if (ctx.request.body.url && ctx.request.body.url.length > 128) throw new ParameterTooLongError('url')
     if (ctx.request.body.hash && ctx.request.body.hash.length > 64) throw new ParameterTooLongError('hash')
+    if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
 
-    const project = await new ProjectRepository().getProject(ctx.params.contractId)
+    const repository = new ProjectRepository()
+    const project = await repository.getProject(ctx.params.contractId)
+
+    if (ctx.state.account !== project.creator) throw new UserUnauthorizedError()
 
     try {
         const stdlib = new ReachProvider().getStdlib()
@@ -147,6 +151,13 @@ router.put('/projects/:contractId', bodyParser(), async ctx => {
         const api = contract.a.Api
         if (ctx.request.body.name) await api.updateName(ctx.request.body.name)
         if (ctx.request.body.url && ctx.request.body.hash) await api.updateMetadata(ctx.request.body.url, ctx.request.body.hash)
+
+        await repository.updateProject({
+            contractId: ctx.params.contractId,
+            name: ctx.request.body.name,
+            offChainImageUrl: ctx.request.body.offChainImageUrl
+        })
+
         ctx.status = 204
     } catch (e) {
         throw new UpdateContractError(e)

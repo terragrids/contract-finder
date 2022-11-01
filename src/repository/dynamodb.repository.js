@@ -1,4 +1,4 @@
-import { ConditionalCheckFailedException, DeleteItemCommand, DescribeTableCommand, DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb'
+import { ConditionalCheckFailedException, DeleteItemCommand, DescribeTableCommand, DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
 import RepositoryError from '../error/repository.error.js'
 import Logger from '../logging/logger.js'
 
@@ -42,6 +42,48 @@ export default class DynamoDbRepository {
             return await this.client.send(command)
         } catch (e) {
             throw new RepositoryError(e, `Unable to put ${itemLogName}`)
+        }
+    }
+
+    async update({ key, attributes, itemLogName = 'item' }) {
+        const updateExpressionList = []
+        const attributeValues = {}
+        let attributeNames
+
+        if (Object.values(attributes).some(value => value !== undefined)) {
+            const updateAttributes = attributes
+
+            for (const [key, value] of Object.entries(updateAttributes)) {
+                if (value !== undefined) {
+                    let placeholder = key
+                    if (key.startsWith('#')) {
+                        placeholder = key.substring(1)
+                        if (!attributeNames) attributeNames = {}
+                        attributeNames[key] = placeholder
+                    }
+                    updateExpressionList.push(`${key} = :${placeholder}`)
+                    attributeValues[`:${placeholder}`] = value
+                }
+            }
+        }
+
+        const updateExpression = updateExpressionList.length > 0 ? `set ${updateExpressionList.join(',')}` : null
+
+        const params = {
+            TableName: this.table,
+            Key: key,
+            UpdateExpression: updateExpression,
+            ExpressionAttributeValues: attributeValues,
+            ExpressionAttributeNames: attributeNames,
+            ConditionExpression: 'attribute_exists(pk)'
+        }
+
+        const command = new UpdateItemCommand(params)
+
+        try {
+            return await this.client.send(command)
+        } catch (e) {
+            throw new RepositoryError(e, `Unable to update ${itemLogName}`)
         }
     }
 
