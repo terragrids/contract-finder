@@ -19,6 +19,7 @@ import ProjectRepository from './repository/project.repository.js'
 import ReadContractError from './error/read-contract.error.js'
 import UpdateContractError from './error/update-contract.error.js'
 import authHandler from './middleware/auth-handler.js'
+import { UserUnauthorizedError } from './error/user-unauthorized-error.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -71,6 +72,7 @@ router.post('/projects', authHandler, bodyParser(), async ctx => {
     if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
     if (ctx.request.body.hash.length > 64) throw new ParameterTooLongError('hash')
     if (ctx.request.body.creator.length > 64) throw new ParameterTooLongError('creator')
+    if (ctx.state.account !== ctx.request.body.creator) throw new UserUnauthorizedError()
 
     const stdlib = new ReachProvider().getStdlib()
 

@@ -48,17 +48,18 @@ jest.mock('./repository/project.repository.js', () =>
 
 jest.mock('../reach/project-contract/build/index.main.mjs', () => jest.fn().mockImplementation(() => ({})))
 
-jest.mock('./middleware/auth-handler.js', () =>
-    jest.fn().mockImplementation(async (ctx, next) => {
-        await next()
-    })
-)
+import authHandler from './middleware/auth-handler.js'
+jest.mock('./middleware/auth-handler.js')
 
 describe('app', function () {
     const OLD_ENV = process.env
 
     beforeEach(() => {
         jest.clearAllMocks()
+        authHandler.mockImplementation(async (ctx, next) => {
+            ctx.state.account = 'project creator'
+            await next()
+        })
         process.env = { ...OLD_ENV } // make a copy
     })
 
@@ -438,6 +439,26 @@ describe('app', function () {
             expect(response.body).toEqual({
                 error: 'MissingParameterError',
                 message: 'creator must be specified'
+            })
+        })
+
+        it('should return 403 when project creator is not the authenticated user', async () => {
+            authHandler.mockImplementation(async (ctx, next) => {
+                ctx.state.account = 'project meh creator'
+                await next()
+            })
+
+            const response = await request(app.callback()).post('/projects').send({
+                name: 'project name',
+                url: 'project url',
+                hash: 'project hash',
+                creator: 'project creator'
+            })
+
+            expect(response.status).toBe(403)
+            expect(response.body).toEqual({
+                error: 'UserUnauthorizedError',
+                message: 'The authenticated user is not authorized to perform this action'
             })
         })
 

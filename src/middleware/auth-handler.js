@@ -61,6 +61,7 @@ export default async function authHandler(ctx, next) {
         const verified = await verify(signature, toCheck.bytesToSign(), toCheck.from.publicKey)
         if (verified) {
             await authRepository.deleteAuthMessage(wallet)
+            ctx.state.account = wallet
             await next()
             return
         }
