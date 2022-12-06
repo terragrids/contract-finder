@@ -164,6 +164,16 @@ router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
     }
 })
 
+router.get('/projects', async ctx => {
+    const projects = await new ProjectRepository().getProjects({
+        sort: ctx.request.query.sort,
+        pageSize: ctx.request.query.pageSize,
+        nextPageKey: ctx.request.query.nextPageKey
+    })
+    ctx.body = projects
+    ctx.status = 200
+})
+
 router.get('/projects/:contractId', async ctx => {
     const project = await new ProjectRepository().getProject(ctx.params.contractId)
 

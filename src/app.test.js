@@ -37,6 +37,7 @@ const mockProjectRepository = {
     createProject: jest.fn().mockImplementation(() => jest.fn()),
     updateProject: jest.fn().mockImplementation(() => jest.fn()),
     getProject: jest.fn().mockImplementation(() => jest.fn()),
+    getProjects: jest.fn().mockImplementation(() => jest.fn()),
     getProjectsByCreator: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/project.repository.js', () =>
@@ -44,6 +45,7 @@ jest.mock('./repository/project.repository.js', () =>
         createProject: mockProjectRepository.createProject,
         updateProject: mockProjectRepository.updateProject,
         getProject: mockProjectRepository.getProject,
+        getProjects: mockProjectRepository.getProjects,
         getProjectsByCreator: mockProjectRepository.getProjectsByCreator
     }))
 )
@@ -1104,7 +1106,47 @@ describe('app', function () {
     })
 
     describe('get projects endpoint', function () {
-        it('should return 200 when getting project and all is fine', async () => {
+        it('should return 200 when getting projects and all is fine', async () => {
+            mockProjectRepository.getProjects.mockImplementation(() => ({
+                projects: [
+                    {
+                        id: 'contract-id-1',
+                        created: 'contract-date-1'
+                    },
+                    {
+                        id: 'contract-id-2',
+                        created: 'contract-date-2'
+                    }
+                ]
+            }))
+
+            const response = await request(app.callback()).get('/projects?sort=asc&pageSize=12&nextPageKey=page-key')
+
+            expect(mockProjectRepository.getProjects).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.getProjects).toHaveBeenCalledWith({
+                sort: 'asc',
+                nextPageKey: 'page-key',
+                pageSize: '12'
+            })
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                projects: [
+                    {
+                        id: 'contract-id-1',
+                        created: 'contract-date-1'
+                    },
+                    {
+                        id: 'contract-id-2',
+                        created: 'contract-date-2'
+                    }
+                ]
+            })
+        })
+    })
+
+    describe('get projects by creator endpoint', function () {
+        it('should return 200 when getting projects and all is fine', async () => {
             mockProjectRepository.getProjectsByCreator.mockImplementation(() => ({
                 projects: [
                     {

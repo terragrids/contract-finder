@@ -117,7 +117,11 @@ export default class DynamoDbRepository {
         const command = new QueryCommand(params)
 
         try {
-            return await this.client.send(command)
+            const data = await this.client.send(command)
+            return {
+                items: data.Items || [],
+                nextPageKey: data.LastEvaluatedKey ? Buffer.from(JSON.stringify(data.LastEvaluatedKey)).toString('base64') : null
+            }
         } catch (e) {
             throw new RepositoryError(e, `Unable to query ${itemLogName}`)
         }

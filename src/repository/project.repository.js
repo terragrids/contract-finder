@@ -60,6 +60,31 @@ export default class ProjectRepository extends DynamoDbRepository {
         }
     }
 
+    async getProjects({ pageSize, nextPageKey, sort }) {
+        const forward = sort && sort === 'desc' ? false : true
+        const data = await this.query({
+            indexName: 'gsi2',
+            conditionExpression: 'gsi2pk = :gsi2pk',
+            attributeValues: {
+                ':gsi2pk': { S: `type|${this.itemName}` }
+            },
+            pageSize,
+            nextPageKey,
+            forward
+        })
+
+        return {
+            projects: data.items.map(project => ({
+                id: project.pk.S.replace('project|', ''),
+                created: project.data.S.split('|')[2],
+                creator: project.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
+                ...(project.name && { name: project.name.S }),
+                ...(project.offChainImageUrl && { offChainImageUrl: project.offChainImageUrl.S })
+            })),
+            ...(data.nextPageKey && { nextPageKey: data.nextPageKey })
+        }
+    }
+
     async getProjectsByCreator({ creator, pageSize, nextPageKey, sort }) {
         const forward = sort && sort === 'desc' ? false : true
         const data = await this.query({
@@ -76,7 +101,7 @@ export default class ProjectRepository extends DynamoDbRepository {
         })
 
         return {
-            projects: data.Items.map(project => ({
+            projects: data.items.map(project => ({
                 id: project.pk.S.replace('project|', ''),
                 created: project.data.S.split('|')[2],
                 ...(project.name && { name: project.name.S }),
