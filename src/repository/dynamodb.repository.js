@@ -109,7 +109,7 @@ export default class DynamoDbRepository {
             KeyConditionExpression: conditionExpression,
             ExpressionAttributeNames: attributeNames,
             ExpressionAttributeValues: attributeValues,
-            Limit: pageSize,
+            Limit: parseInt(pageSize),
             ExclusiveStartKey: nextPageKey ? JSON.parse(Buffer.from(nextPageKey, 'base64').toString('ascii')) : null,
             ScanIndexForward: forward
         }
