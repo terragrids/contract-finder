@@ -30,6 +30,17 @@ const thread = async f => await f()
 
 const algo = x => stdlib.formatCurrency(x, 4)
 const fmt = x => `${algo(x)} ALGO`
+const fmtToken = (x, token) => `${x} ${token.sym}`
+
+const getBalances = async (who, token) => {
+    return await stdlib.balancesOf(who, [null, token.id])
+}
+
+const logBalances = async (accountName, account, token) => {
+    const [algoBal, tokenBal] = await getBalances(account, token)
+    console.log(`${accountName} has ${fmt(algoBal)} and ${fmtToken(tokenBal, token)}`)
+    return [algoBal, tokenBal]
+}
 
 const callAPI = async (name, f, successMsg, failureMsg) => {
     console.log(`${name} is calling the API`)
@@ -56,40 +67,35 @@ const getAndLogBalance = async (account, name) => {
     return algo(balance)
 }
 
-const logProjectAndAssert = async (accountName, view, expName, expUrl, expHash, expCreator) => {
-    // eslint-disable-next-line no-control-regex
-    const removePadding = s => s.replace(/\x00/g, '')
-
-    const name = removePadding((await view.name())[1])
-    const url = removePadding((await view.url())[1])
-    const hash = removePadding((await view.hash())[1])
+const logProjectAndAssert = async (accountName, view, expCreator, expToken, expBalance) => {
     const creator = stdlib.formatAddress((await view.creator())[1])
-    console.log(`${accountName} sees that project contract has name ${name}, expected ${expName}`)
-    console.log(`${accountName} sees that project contract has url ${url}, expected ${expUrl}`)
-    console.log(`${accountName} sees that project contract has hash ${hash}, expected ${expHash}`)
+    const token = (await view.token())[1].toNumber()
+    const balance = (await view.balance())[1].toNumber()
+
     console.log(`${accountName} sees that project creator is ${creator}, expected ${expCreator}`)
-    assert.equal(name, expName)
-    assert.equal(url, expUrl)
-    assert.equal(hash, expHash)
+    console.log(`${accountName} sees that project token is ${token}, expected ${expToken.id.toNumber()}`)
+    console.log(`${accountName} sees that project balance is ${algo(balance)}, expected ${algo(expBalance)}`)
     assert.equal(creator, expCreator)
+    assert.equal(token, expToken.id.toNumber())
+    assert.equal(balance, expBalance)
 }
 
-const userConnectAndStop = async (accountName, account, contract, prjName, prjUrl, prjHash, prjCreator, ready) => {
+const connectAndStop = async (accountName, account, contract, creator, token, ready) => {
     return async () => {
         console.log(`${accountName} is attaching to the contract...`)
         const ctc = account.contract(backend, contract.getInfo())
         const api = ctc.a.Api
         const view = ctc.v.View
 
-        console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
+        logBalances(accountName, account, token)
 
         await ready.wait()
 
         // Initial state
 
-        await logProjectAndAssert(accountName, view, prjName, prjUrl, prjHash, prjCreator)
+        await logProjectAndAssert(accountName, view, creator, token, 0)
 
-        console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
+        logBalances(accountName, account, token)
 
         // Stop the contract
 
@@ -97,43 +103,33 @@ const userConnectAndStop = async (accountName, account, contract, prjName, prjUr
 
         await callAPI(accountName, () => api.stop(), `${accountName} managed to stop the contract`, `${accountName} failed to stop the contract`)
 
-        console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
+        logBalances(accountName, account, token)
     }
 }
 
-const userConnectUpdateAndStop = async (accountName, account, contract, prjName, prjUrl, prjHash, prjCreator, ready) => {
+const connectDepositAndStop = async (accountName, account, contract, creator, token, ready) => {
     return async () => {
         console.log(`${accountName} is attaching to the contract...`)
         const ctc = account.contract(backend, contract.getInfo())
         const api = ctc.a.Api
         const view = ctc.v.View
 
-        console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
+        logBalances(accountName, account, token)
 
         await ready.wait()
 
         // Initial state
 
-        await logProjectAndAssert(accountName, view, prjName, prjUrl, prjHash, prjCreator)
+        await logProjectAndAssert(accountName, view, creator, token, 0)
+        await logBalances(accountName, account, token)
 
-        console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
+        // Deposit
 
-        // Update project name
+        await callAPI(accountName, () => api.deposit(stdlib.parseCurrency(20)), `${accountName} managed to deposit ALGO`, `${accountName} failed to deposit ALGO`)
 
-        await callAPI(accountName, () => api.updateName('project 2'), `${accountName} managed to update the project name`, `${accountName} failed to update the project name`)
-
-        await logProjectAndAssert(accountName, view, 'project 2', prjUrl, prjHash, prjCreator)
-
-        // Update project metadata
-
-        await callAPI(
-            accountName,
-            () => api.updateMetadata('https://terragrids.org/project2', 'project_2_hash'),
-            `${accountName} managed to update the project metadata`,
-            `${accountName} failed to update the project metadata`
-        )
-
-        await logProjectAndAssert(accountName, view, 'project 2', 'https://terragrids.org/project2', 'project_2_hash', prjCreator)
+        await logProjectAndAssert(accountName, view, creator, token, stdlib.parseCurrency(20))
+        await logBalances(accountName, account, token)
+        assert(algo(await stdlib.balanceOf(account)) < 80)
 
         // Stop the contract
 
@@ -141,7 +137,9 @@ const userConnectUpdateAndStop = async (accountName, account, contract, prjName,
 
         await callAPI(accountName, () => api.stop(), `${accountName} managed to stop the contract`, `${accountName} failed to stop the contract`)
 
-        console.log(`${accountName} has ${fmt(await stdlib.balanceOf(account))}`)
+        const [algoBal, tokenBal] = await logBalances(accountName, account, token)
+        assert.equal(tokenBal, 1)
+        assert.ok(algo(algoBal) > 99)
     }
 }
 
@@ -156,9 +154,7 @@ const runTestCase = async testCase => {
     console.log('Deploying the contract...')
 
     // Define initial project data
-    const name = 'project 1'
-    const url = 'https://terragrids.org/project1'
-    const hash = 'project_1_hash'
+    const gil = await stdlib.launchToken(accAdmin, 'gil', 'GIL', { supply: 1, decimals: 0 })
     const creator = stdlib.formatAddress(accCreator.getAddress())
     console.log(`Creator address ${creator}`)
 
@@ -169,15 +165,15 @@ const runTestCase = async testCase => {
     switch (testCase) {
         default:
         case 'CONNECT_STOP':
-            testRun = userConnectAndStop
+            testRun = connectAndStop
             break
-        case 'CONNECT_UPDATE_STOP':
-            testRun = userConnectUpdateAndStop
+        case 'CONNECT_DEPOSIT_STOP':
+            testRun = connectDepositAndStop
             break
     }
 
     await Promise.all([
-        thread(await testRun('Admin', accAdmin, ctcAdmin, name, url, hash, creator, ready)),
+        thread(await testRun('Admin', accAdmin, ctcAdmin, creator, gil, ready)),
         backend.Admin(ctcAdmin, {
             log: (...args) => {
                 console.log(...args)
@@ -188,9 +184,7 @@ const runTestCase = async testCase => {
                 const adminAlgo = await stdlib.balanceOf(accAdmin)
                 console.log(`Admin has ${fmt(adminAlgo)}`)
             },
-            name,
-            url,
-            hash,
+            token: gil.id,
             creator
         })
     ])
@@ -201,4 +195,4 @@ const runTestCase = async testCase => {
 }
 
 await runTestCase('CONNECT_STOP')
-await runTestCase('CONNECT_UPDATE_STOP')
+await runTestCase('CONNECT_DEPOSIT_STOP')

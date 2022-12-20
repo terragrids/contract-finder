@@ -4,74 +4,132 @@
 /**
  * The Project Contract owns data fields which represent a Terragrids Creator's project.
  * Data fields are:
- * 1/ name: the project name
- * 2/ url: a URL pointing to the IPFS location of the project metadata
- * 3/ hash: the project metadata integrity hash
- * 4/ creator: the creator wallet address
- * This is similar to the data stored in an ARC3 NFT.
- * Creators can update their project details by replacing the current name or URL with new values
- * using the API exposed by this smart contract.
+ * 1/ token: the project ARC-19 NFT with upgradable name and information about the project
+ * 2/ creator: the creator wallet address
+ *
+ * Creators can update their project details by updating the ARC-19 NFT name, description and properties
+ * outside of this smart contract.
+ *
+ * This smart contract:
+ * 1/ Takes the NFT into its balance at deployment
+ * 2/ Takes creator’s address at deployment
+ * 3/ Exposes API function to deposit ALGO
+ * 4/ Exposes API function to withdraw ALGO balance and NFT into admin’s wallet
+ * 5/ Exposes API function to pay ALGO balance into creator’s wallet
+ * 6/ Exposes API function to pay NFT into creator’s wallet
+ * 7/ Exposes API function to stop the contract and pay residual balance and NFT into admin’s wallet
  */
 
 export const main = Reach.App(() => {
     const A = Participant('Admin', {
         ...hasConsoleLogger,
         onReady: Fun(true, Null),
-        name: Bytes(128),
-        url: Bytes(128),
-        hash: Bytes(64),
+        token: Token,
         creator: Address
     })
 
     const ProjectView = View('View', {
-        name: Bytes(128),
-        url: Bytes(128),
-        hash: Bytes(64),
-        creator: Address
+        creator: Address,
+        balance: UInt,
+        token: Token
     })
 
     const Api = API('Api', {
-        updateName: Fun([Bytes(128)], Null),
-        updateMetadata: Fun([Bytes(128), Bytes(64)], Null),
+        deposit: Fun([UInt], Bool),
+        withdraw: Fun([], Bool),
+        payBalance: Fun([], Bool),
+        payToken: Fun([], Bool),
         stop: Fun([], Bool)
     })
 
     init()
 
     A.only(() => {
-        const [projectName, metadataUrl, metadataHash, creator] = declassify([interact.name, interact.url, interact.hash, interact.creator])
+        const [token, creator] = declassify([interact.token, interact.creator])
     })
 
-    A.publish(projectName, metadataUrl, metadataHash, creator)
+    A.publish(token, creator)
+    commit()
+
+    A.pay([[1, token]])
+    assert(balance(token) == 1, 'Balance of NFT is wrong')
 
     A.interact.onReady(getContract())
     A.interact.log('The project contract is ready')
 
-    const [done, name, url, hash] = parallelReduce([false, projectName, metadataUrl, metadataHash])
+    const [done, paid, tokenBalance] = parallelReduce([false, 0, 1])
         .define(() => {
-            ProjectView.name.set(name)
-            ProjectView.url.set(url)
-            ProjectView.hash.set(hash)
             ProjectView.creator.set(creator)
+            ProjectView.balance.set(balance())
+            ProjectView.token.set(token)
         })
-        .invariant(balance() == 0)
+        .invariant(balance() == paid && balance(token) == tokenBalance)
         .while(!done)
         /**
-         * Update project name
+         * Deposit money
          */
-        .api(Api.updateName, (newName, k) => {
-            k(null)
-            return [false, newName, url, hash]
-        })
+        .api(
+            Api.deposit,
+            amount => amount,
+            (amount, k) => {
+                k(true)
+                return [false, amount + paid, tokenBalance]
+            }
+        )
         /**
-         * Update project metadata
+         * Withdraw balance and token into admin's wallet
          */
-        .api(Api.updateMetadata, (newUrl, newHash, k) => {
-            k(null)
-            return [false, name, newUrl, newHash]
-        })
+        .api(
+            Api.withdraw,
+            () => {
+                assume(this == A)
+            },
+            () => 0,
+            k => {
+                const isAdmin = this == A
+                require(isAdmin)
+                k(isAdmin)
+                transfer(paid).to(A)
+                transfer(tokenBalance, token).to(A)
+                return [false, 0, 0]
+            }
+        )
         /**
-         * Stops this contract
+         * Pay balance into creator's wallet
+         */
+        .api(
+            Api.payBalance,
+            () => {
+                assume(this == A)
+            },
+            () => 0,
+            k => {
+                const isAdmin = this == A
+                require(isAdmin)
+                k(isAdmin)
+                transfer(paid).to(creator)
+                return [false, 0, tokenBalance]
+            }
+        )
+        /**
+         * Pay token into creator's wallet
+         */
+        .api(
+            Api.payToken,
+            () => {
+                assume(this == A)
+            },
+            () => 0,
+            k => {
+                const isAdmin = this == A
+                require(isAdmin)
+                k(isAdmin)
+                transfer(tokenBalance, token).to(creator)
+                return [false, paid, 0]
+            }
+        )
+        /**
+         * Stop this contract
          */
         .api(
             Api.stop,
@@ -83,10 +141,16 @@ export const main = Reach.App(() => {
                 const isAdmin = this == A
                 require(isAdmin)
                 k(isAdmin)
-                return [true, name, url, hash]
+                return [true, paid, tokenBalance]
             }
         )
         .timeout(false)
+
+    /**
+     * Pay any residual balance into the admin's wallet
+     */
+    transfer(paid).to(A)
+    transfer(tokenBalance, token).to(A)
 
     commit()
     A.interact.log('The project contract is closing down...')
