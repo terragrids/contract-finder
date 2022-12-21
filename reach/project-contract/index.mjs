@@ -42,15 +42,16 @@ const logBalances = async (accountName, account, token) => {
     return [algoBal, tokenBal]
 }
 
-const callAPI = async (name, f, successMsg, failureMsg) => {
+const callAPI = async (name, f, successMsg, failureMsg, expectToFail) => {
     console.log(`${name} is calling the API`)
     await timeout(10 * Math.random())
     let result
     try {
         result = await f()
+        if (expectToFail) throw new Error('This API call is expected to fail')
         console.log(successMsg)
     } catch (e) {
-        console.log(e)
+        if (!expectToFail) console.log(e)
         console.log(failureMsg)
     }
     return result
@@ -80,12 +81,13 @@ const logProjectAndAssert = async (accountName, view, expCreator, expToken, expB
     assert.equal(balance, expBalance)
 }
 
-const connectAndStop = async (accountName, account, contract, creator, token, ready) => {
+const connectAndStop = async (accountName, account, contract, accCreator, token, ready) => {
     return async () => {
         console.log(`${accountName} is attaching to the contract...`)
         const ctc = account.contract(backend, contract.getInfo())
         const api = ctc.a.Api
         const view = ctc.v.View
+        const creator = stdlib.formatAddress(accCreator.getAddress())
 
         logBalances(accountName, account, token)
 
@@ -107,12 +109,13 @@ const connectAndStop = async (accountName, account, contract, creator, token, re
     }
 }
 
-const connectDepositAndStop = async (accountName, account, contract, creator, token, ready) => {
+const connectDepositAndStop = async (accountName, account, contract, accCreator, token, ready) => {
     return async () => {
         console.log(`${accountName} is attaching to the contract...`)
         const ctc = account.contract(backend, contract.getInfo())
         const api = ctc.a.Api
         const view = ctc.v.View
+        const creator = stdlib.formatAddress(accCreator.getAddress())
 
         logBalances(accountName, account, token)
 
@@ -143,6 +146,209 @@ const connectDepositAndStop = async (accountName, account, contract, creator, to
     }
 }
 
+const connectDepositPayAndStop = async (accountName, account, contract, accCreator, token, ready) => {
+    return async () => {
+        console.log(`${accountName} is attaching to the contract...`)
+        const ctc = account.contract(backend, contract.getInfo())
+        const api = ctc.a.Api
+        const view = ctc.v.View
+        const creator = stdlib.formatAddress(accCreator.getAddress())
+
+        logBalances(accountName, account, token)
+
+        await ready.wait()
+
+        // Initial state
+
+        await logProjectAndAssert(accountName, view, creator, token, 0)
+        await logBalances(accountName, account, token)
+
+        // Deposit
+
+        await callAPI(accountName, () => api.deposit(stdlib.parseCurrency(20)), `${accountName} managed to deposit ALGO`, `${accountName} failed to deposit ALGO`)
+
+        await logProjectAndAssert(accountName, view, creator, token, stdlib.parseCurrency(20))
+        await logBalances(accountName, account, token)
+        assert(algo(await stdlib.balanceOf(account)) < 80)
+
+        // Pay balance to creator
+
+        await callAPI(accountName, () => api.payBalance(), `${accountName} managed to pay balance`, `${accountName} failed to pay balance`)
+
+        await logProjectAndAssert(accountName, view, creator, token, 0)
+        await logBalances('Creator', accCreator, token)
+        assert.equal(algo(await stdlib.balanceOf(accCreator)), 120)
+
+        // Pay token to creator
+
+        await accCreator.tokenAccept(token.id)
+
+        await callAPI(accountName, () => api.payToken(), `${accountName} managed to pay token`, `${accountName} failed to pay token`)
+
+        await logProjectAndAssert(accountName, view, creator, token, 0)
+        await logBalances('Creator', accCreator, token)
+        assert.ok(algo(await stdlib.balanceOf(accCreator)) > 119)
+        assert.equal((await stdlib.balanceOf(accCreator, token.id)).toNumber(), 1)
+        assert.equal((await stdlib.balanceOf(account, token.id)).toNumber(), 0)
+
+        // Stop the contract
+
+        console.log(`${accountName} is trying to stop the contract...`)
+
+        await callAPI(accountName, () => api.stop(), `${accountName} managed to stop the contract`, `${accountName} failed to stop the contract`)
+
+        const [algoBal, tokenBal] = await logBalances(accountName, account, token)
+        assert.equal(tokenBal, 0)
+        assert.ok(algo(algoBal) < 80)
+    }
+}
+
+const connectDepositWithdrawPayAndStop = async (accountName, account, contract, accCreator, token, ready) => {
+    return async () => {
+        console.log(`${accountName} is attaching to the contract...`)
+        const ctc = account.contract(backend, contract.getInfo())
+        const api = ctc.a.Api
+        const view = ctc.v.View
+        const creator = stdlib.formatAddress(accCreator.getAddress())
+
+        logBalances(accountName, account, token)
+
+        await ready.wait()
+
+        // Initial state
+
+        await logProjectAndAssert(accountName, view, creator, token, 0)
+        await logBalances(accountName, account, token)
+
+        // Deposit
+
+        await callAPI(accountName, () => api.deposit(stdlib.parseCurrency(20)), `${accountName} managed to deposit ALGO`, `${accountName} failed to deposit ALGO`)
+
+        await logProjectAndAssert(accountName, view, creator, token, stdlib.parseCurrency(20))
+        await logBalances(accountName, account, token)
+        assert(algo(await stdlib.balanceOf(account)) < 80)
+
+        // Withdraw balance and token into admin's account
+
+        await callAPI(accountName, () => api.withdraw(), `${accountName} managed to withdraw`, `${accountName} failed to withdraw`)
+
+        await logProjectAndAssert(accountName, view, creator, token, 0)
+        await logBalances(accountName, account, token)
+        await logBalances('Creator', accCreator, token)
+        assert.ok(algo(await stdlib.balanceOf(accCreator)) >= 100)
+        assert.ok(algo(await stdlib.balanceOf(account)) > 99)
+        assert.equal((await stdlib.balanceOf(accCreator, token.id)).toNumber(), 0)
+        assert.equal((await stdlib.balanceOf(account, token.id)).toNumber(), 1)
+
+        // Pay no balance to creator
+
+        await callAPI(accountName, () => api.payBalance(), `${accountName} managed to pay balance`, `${accountName} failed to pay balance`)
+
+        await logProjectAndAssert(accountName, view, creator, token, 0)
+        await logBalances('Creator', accCreator, token)
+        assert.equal(algo(await stdlib.balanceOf(accCreator)), 100)
+
+        // Pay no token to creator
+
+        await accCreator.tokenAccept(token.id)
+
+        await callAPI(accountName, () => api.payToken(), `${accountName} managed to pay token`, `${accountName} failed to pay token`)
+
+        await logProjectAndAssert(accountName, view, creator, token, 0)
+        await logBalances('Creator', accCreator, token)
+        assert.ok(algo(await stdlib.balanceOf(accCreator)) > 99)
+        assert.equal((await stdlib.balanceOf(accCreator, token.id)).toNumber(), 0)
+        assert.equal((await stdlib.balanceOf(account, token.id)).toNumber(), 1)
+
+        // Stop the contract
+
+        console.log(`${accountName} is trying to stop the contract...`)
+
+        await callAPI(accountName, () => api.stop(), `${accountName} managed to stop the contract`, `${accountName} failed to stop the contract`)
+
+        const [algoBal, tokenBal] = await logBalances(accountName, account, token)
+        assert.equal(tokenBal, 1)
+        assert.ok(algo(algoBal) > 99)
+    }
+}
+
+const connectDepositWithdrawPayAndStopWithCreatorAccount = async (accountName, account, contract, accCreator, token, ready) => {
+    return async () => {
+        console.log('Creator is attaching to the contract...')
+        const ctc = accCreator.contract(backend, contract.getInfo())
+        const api = ctc.a.Api
+        const view = ctc.v.View
+        const creator = stdlib.formatAddress(accCreator.getAddress())
+
+        logBalances(accountName, account, token)
+
+        await ready.wait()
+
+        // Initial state
+
+        await logProjectAndAssert(accountName, view, creator, token, 0)
+        await logBalances(accountName, account, token)
+
+        // Deposit
+
+        await callAPI('Creator', () => api.deposit(stdlib.parseCurrency(20)), 'Creator managed to deposit ALGO', 'Creator failed to deposit ALGO')
+
+        await logProjectAndAssert(accountName, view, creator, token, stdlib.parseCurrency(20))
+        await logBalances(accountName, account, token)
+        assert(algo(await stdlib.balanceOf(account)) > 99)
+        assert(algo(await stdlib.balanceOf(accCreator)) < 80)
+
+        // Withdraw balance and token into admin's account
+
+        await callAPI('Creator', () => api.withdraw(), 'Creator managed to withdraw', 'Creator failed to withdraw', true)
+
+        await logProjectAndAssert(accountName, view, creator, token, stdlib.parseCurrency(20))
+        await logBalances(accountName, account, token)
+        await logBalances('Creator', accCreator, token)
+        assert.ok(algo(await stdlib.balanceOf(accCreator)) < 100)
+        assert.ok(algo(await stdlib.balanceOf(account)) > 99)
+        assert.equal((await stdlib.balanceOf(accCreator, token.id)).toNumber(), 0)
+        assert.equal((await stdlib.balanceOf(account, token.id)).toNumber(), 0)
+
+        // Pay balance to creator
+
+        await callAPI('Creator', () => api.payBalance(), 'Creator managed to pay balance', 'Creator failed to pay balance', true)
+
+        await logProjectAndAssert(accountName, view, creator, token, stdlib.parseCurrency(20))
+        await logBalances('Creator', accCreator, token)
+        assert.ok(algo(await stdlib.balanceOf(accCreator)) < 80)
+
+        // Pay token to creator
+
+        await accCreator.tokenAccept(token.id)
+
+        await callAPI('Creator', () => api.payToken(), 'Creator managed to pay token', 'Creator failed to pay token', true)
+
+        await logProjectAndAssert(accountName, view, creator, token, stdlib.parseCurrency(20))
+        await logBalances('Creator', accCreator, token)
+        assert.ok(algo(await stdlib.balanceOf(accCreator)) < 80)
+        assert.equal((await stdlib.balanceOf(accCreator, token.id)).toNumber(), 0)
+        assert.equal((await stdlib.balanceOf(account, token.id)).toNumber(), 0)
+
+        // Stop the contract
+
+        console.log('Creator is trying to stop the contract...')
+
+        await callAPI('Creator', () => api.stop(), 'Creator managed to stop the contract', 'Creator failed to stop the contract', true)
+
+        console.log(`${accountName} is trying to stop the contract...`)
+
+        const adminCtc = account.contract(backend, contract.getInfo())
+        const adminApi = adminCtc.a.Api
+
+        await callAPI(accountName, () => adminApi.stop(), `${accountName} managed to stop the contract`, `${accountName} failed to stop the contract`)
+
+        const [algoBal, tokenBal] = await logBalances(accountName, account, token)
+        assert.equal(tokenBal, 1)
+        assert.ok(algo(algoBal) > 119)
+    }
+}
+
 const runTestCase = async testCase => {
     console.log(`>> Test case: ${testCase}`)
     const accAdmin = await createTestAccount()
@@ -170,10 +376,19 @@ const runTestCase = async testCase => {
         case 'CONNECT_DEPOSIT_STOP':
             testRun = connectDepositAndStop
             break
+        case 'CONNECT_DEPOSIT_PAY_STOP':
+            testRun = connectDepositPayAndStop
+            break
+        case 'CONNECT_DEPOSIT_WITHDRAW_PAY_STOP':
+            testRun = connectDepositWithdrawPayAndStop
+            break
+        case 'CONNECT_DEPOSIT_WITHDRAW_PAY_STOP_CREATOR':
+            testRun = connectDepositWithdrawPayAndStopWithCreatorAccount
+            break
     }
 
     await Promise.all([
-        thread(await testRun('Admin', accAdmin, ctcAdmin, creator, gil, ready)),
+        thread(await testRun('Admin', accAdmin, ctcAdmin, accCreator, gil, ready)),
         backend.Admin(ctcAdmin, {
             log: (...args) => {
                 console.log(...args)
@@ -190,9 +405,11 @@ const runTestCase = async testCase => {
     ])
 
     console.log('Contract stopped.')
-    const adminAlgo = await getAndLogBalance(accAdmin, 'Admin')
-    assert(parseFloat(adminAlgo) < 100)
+    await getAndLogBalance(accAdmin, 'Admin')
 }
 
 await runTestCase('CONNECT_STOP')
 await runTestCase('CONNECT_DEPOSIT_STOP')
+await runTestCase('CONNECT_DEPOSIT_PAY_STOP')
+await runTestCase('CONNECT_DEPOSIT_WITHDRAW_PAY_STOP')
+await runTestCase('CONNECT_DEPOSIT_WITHDRAW_PAY_STOP_CREATOR')
