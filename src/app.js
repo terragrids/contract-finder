@@ -20,6 +20,8 @@ import ReadContractError from './error/read-contract.error.js'
 import UpdateContractError from './error/update-contract.error.js'
 import authHandler from './middleware/auth-handler.js'
 import { UserUnauthorizedError } from './error/user-unauthorized-error.js'
+import MintTokenError from './error/mint-token.error.js'
+import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-utils.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -58,6 +60,37 @@ router.get('/hc', async ctx => {
             algoIndexer: algoIndexerHC.version ? ok : error,
             algoAccount: algoAccount.networkAccount ? ok : error
         }
+    }
+})
+
+router.post('/projects/token', bodyParser(), async ctx => {
+    if (!ctx.request.body.name) throw new MissingParameterError('name')
+    if (!ctx.request.body.cid) throw new MissingParameterError('cid')
+
+    if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
+
+    const stdlib = new ReachProvider().getStdlib()
+
+    try {
+        const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
+
+        const cid = ctx.request.body.cid
+        const { address, url } = algorandAddressFromCID(stdlib.algosdk, cid)
+        const cidFromAddress = cidFromAlgorandAddress(stdlib.algosdk, address)
+        if (cid !== cidFromAddress) throw new Error('Error verifying cid')
+
+        const token = await stdlib.launchToken(algoAccount, ctx.request.body.name, 'TRPRJ', {
+            supply: 1,
+            decimals: 0,
+            url,
+            reserve: address,
+            manager: algoAccount.networkAccount.addr
+        })
+
+        ctx.body = { id: token.id.toNumber() }
+        ctx.status = 201
+    } catch (e) {
+        throw new MintTokenError(e)
     }
 })
 
