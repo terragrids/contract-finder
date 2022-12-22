@@ -9,7 +9,7 @@ import requestLogger from './middleware/request-logger.js'
 import DeployContractError from './error/deploy-contract.error.js'
 import ReachProvider from './provider/reach-provider.js'
 import * as backend from '../reach/project-contract/build/index.main.mjs'
-import { getContractFromJsonString, getJsonStringFromContract, removePadding } from './utils/string-utils.js'
+import { getContractFromJsonString, getJsonStringFromContract } from './utils/string-utils.js'
 import { createPromise } from './utils/promise.js'
 import MissingParameterError from './error/missing-parameter.error.js'
 import ParameterTooLongError from './error/parameter-too-long.error.js'
@@ -20,6 +20,10 @@ import ReadContractError from './error/read-contract.error.js'
 import UpdateContractError from './error/update-contract.error.js'
 import authHandler from './middleware/auth-handler.js'
 import { UserUnauthorizedError } from './error/user-unauthorized-error.js'
+import MintTokenError from './error/mint-token.error.js'
+import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-utils.js'
+import AlgoIndexer from './network/algo-indexer.js'
+import AssetNotFoundError from './error/asset-not-found.error.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -61,20 +65,50 @@ router.get('/hc', async ctx => {
     }
 })
 
-router.post('/projects', authHandler, bodyParser(), async ctx => {
+router.post('/projects/token', authHandler, bodyParser(), async ctx => {
     if (!ctx.request.body.name) throw new MissingParameterError('name')
-    if (!ctx.request.body.url) throw new MissingParameterError('url')
-    if (!ctx.request.body.hash) throw new MissingParameterError('hash')
-    if (!ctx.request.body.creator) throw new MissingParameterError('creator')
+    if (!ctx.request.body.cid) throw new MissingParameterError('cid')
 
     if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
-    if (ctx.request.body.url.length > 128) throw new ParameterTooLongError('url')
-    if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
-    if (ctx.request.body.hash.length > 64) throw new ParameterTooLongError('hash')
+
+    const stdlib = new ReachProvider().getStdlib()
+
+    try {
+        const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
+
+        const cid = ctx.request.body.cid
+        const { address, url } = algorandAddressFromCID(stdlib.algosdk, cid)
+        const cidFromAddress = cidFromAlgorandAddress(stdlib.algosdk, address)
+        if (cid !== cidFromAddress) throw new Error('Error verifying cid')
+
+        const token = await stdlib.launchToken(algoAccount, ctx.request.body.name, 'TRPRJ', {
+            supply: 1,
+            decimals: 0,
+            url,
+            reserve: address,
+            manager: algoAccount.networkAccount.addr
+        })
+
+        ctx.body = { id: token.id.toNumber() }
+        ctx.status = 201
+    } catch (e) {
+        throw new MintTokenError(e)
+    }
+})
+
+router.post('/projects', authHandler, bodyParser(), async ctx => {
+    if (!ctx.request.body.name) throw new MissingParameterError('name')
+    if (!ctx.request.body.creator) throw new MissingParameterError('creator')
+    if (!ctx.request.body.cid) throw new MissingParameterError('cid')
+    if (!ctx.request.body.offChainImageUrl) throw new MissingParameterError('offChainImageUrl')
+
+    if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
     if (ctx.request.body.creator.length > 64) throw new ParameterTooLongError('creator')
+    if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
     if (ctx.state.account !== ctx.request.body.creator) throw new UserUnauthorizedError()
 
     const stdlib = new ReachProvider().getStdlib()
+    const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
 
     try {
         stdlib.protect(stdlib.T_Address, ctx.request.body.creator)
@@ -82,9 +116,35 @@ router.post('/projects', authHandler, bodyParser(), async ctx => {
         throw new AddressMalformedError(e)
     }
 
-    try {
-        const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
+    /**
+     * Mint project token
+     */
 
+    let tokenId
+    try {
+        const cid = ctx.request.body.cid
+        const { address, url } = algorandAddressFromCID(stdlib.algosdk, cid)
+        const cidFromAddress = cidFromAlgorandAddress(stdlib.algosdk, address)
+        if (cid !== cidFromAddress) throw new Error('Error verifying cid')
+
+        const token = await stdlib.launchToken(algoAccount, ctx.request.body.name, 'TRPRJ', {
+            supply: 1,
+            decimals: 0,
+            url,
+            reserve: address,
+            manager: algoAccount.networkAccount.addr
+        })
+
+        tokenId = token.id.toNumber()
+    } catch (e) {
+        throw new MintTokenError(e)
+    }
+
+    /**
+     * Deploy project contract
+     */
+
+    try {
         const { promise, succeed, fail } = createPromise()
 
         try {
@@ -98,17 +158,16 @@ router.post('/projects', authHandler, bodyParser(), async ctx => {
                             contractId,
                             name: ctx.request.body.name,
                             offChainImageUrl: ctx.request.body.offChainImageUrl,
-                            creator: ctx.request.body.creator
+                            creator: ctx.request.body.creator,
+                            tokenId: tokenId
                         })
                         succeed(contractId)
                     } catch (e) {
                         fail(e)
                     }
                 },
-                name: ctx.request.body.name,
-                url: ctx.request.body.url,
-                hash: ctx.request.body.hash,
-                creator: ctx.request.body.creator
+                creator: ctx.request.body.creator,
+                token: tokenId
             })
         } catch (e) {
             fail(e)
@@ -116,7 +175,7 @@ router.post('/projects', authHandler, bodyParser(), async ctx => {
 
         const contractInfo = await promise
 
-        ctx.body = { contractInfo }
+        ctx.body = { contractInfo, tokenId }
         ctx.status = 201
     } catch (e) {
         throw new DeployContractError(e)
@@ -177,6 +236,7 @@ router.get('/projects', async ctx => {
 router.get('/projects/:contractId', async ctx => {
     const project = await new ProjectRepository().getProject(ctx.params.contractId)
 
+    let balance, tokenId, creator
     try {
         const stdlib = new ReachProvider().getStdlib()
         const algoAccount = await stdlib.createAccount()
@@ -186,14 +246,24 @@ router.get('/projects/:contractId', async ctx => {
         const view = contract.v.View
 
         // We need to read different view parameters sequentially
-        const name = removePadding((await view.name())[1])
-        const url = removePadding((await view.url())[1])
-        const hash = removePadding((await view.hash())[1])
-        const creator = stdlib.formatAddress((await view.creator())[1])
-
-        ctx.body = { ...project, creator, name, hash, url }
+        balance = (await view.balance())[1].toNumber()
+        tokenId = (await view.token())[1].toNumber()
+        creator = stdlib.formatAddress((await view.creator())[1])
     } catch (e) {
         throw new ReadContractError(e)
+    }
+
+    const indexerResponse = await new AlgoIndexer().callAlgonodeIndexerEndpoint(`assets/${tokenId}`)
+    if (indexerResponse.status !== 200 || indexerResponse.json.asset.deleted) throw new AssetNotFoundError()
+
+    ctx.body = {
+        ...project,
+        balance,
+        tokenId,
+        creator,
+        name: indexerResponse.json.asset.params.name,
+        url: indexerResponse.json.asset.params.url,
+        reserve: indexerResponse.json.asset.params.reserve
     }
 })
 
