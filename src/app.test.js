@@ -1215,6 +1215,7 @@ describe('app', function () {
             const view = {
                 View: {
                     balance: () => [0, { toNumber: () => 123 }],
+                    tokenBalance: () => [0, { toNumber: () => 1 }],
                     token: () => [0, { toNumber: () => 'project token id' }],
                     creator: () => [0, 'project creator']
                 }
@@ -1260,7 +1261,8 @@ describe('app', function () {
                 url: 'project url',
                 reserve: 'project reserve',
                 tokenId: 'project token id',
-                balance: 123
+                balance: 123,
+                approved: false
             })
         })
 
@@ -1296,6 +1298,7 @@ describe('app', function () {
             const view = {
                 View: {
                     balance: () => [0, { toNumber: () => 123 }],
+                    tokenBalance: () => [0, { toNumber: () => 0 }],
                     token: () => [0, { toNumber: () => 'project token id' }],
                     creator: () => [0, 'project creator']
                 }
@@ -1350,6 +1353,7 @@ describe('app', function () {
             const view = {
                 View: {
                     balance: () => [0, { toNumber: () => 123 }],
+                    tokenBalance: () => [0, { toNumber: () => 0 }],
                     token: () => [0, { toNumber: () => 'project token id' }],
                     creator: () => [0, 'project creator']
                 }

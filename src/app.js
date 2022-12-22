@@ -236,7 +236,7 @@ router.get('/projects', async ctx => {
 router.get('/projects/:contractId', async ctx => {
     const project = await new ProjectRepository().getProject(ctx.params.contractId)
 
-    let balance, tokenId, creator
+    let balance, tokenBalance, tokenId, creator
     try {
         const stdlib = new ReachProvider().getStdlib()
         const algoAccount = await stdlib.createAccount()
@@ -247,6 +247,7 @@ router.get('/projects/:contractId', async ctx => {
 
         // We need to read different view parameters sequentially
         balance = (await view.balance())[1].toNumber()
+        tokenBalance = (await view.tokenBalance())[1].toNumber()
         tokenId = (await view.token())[1].toNumber()
         creator = stdlib.formatAddress((await view.creator())[1])
     } catch (e) {
@@ -259,6 +260,7 @@ router.get('/projects/:contractId', async ctx => {
     ctx.body = {
         ...project,
         balance,
+        approved: tokenBalance === 0,
         tokenId,
         creator,
         name: indexerResponse.json.asset.params.name,
