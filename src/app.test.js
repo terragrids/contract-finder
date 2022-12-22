@@ -8,7 +8,8 @@ const mockStdlib = {
     createAccount: jest.fn().mockImplementation(() => jest.fn()),
     protect: jest.fn().mockImplementation(() => jest.fn()),
     formatAddress: jest.fn().mockImplementation(() => jest.fn()),
-    launchToken: jest.fn().mockImplementation(() => jest.fn())
+    launchToken: jest.fn().mockImplementation(() => jest.fn()),
+    algosdk: jest.fn().mockImplementation(() => jest.fn())
 }
 
 jest.mock('./provider/reach-provider.js', () =>
@@ -20,7 +21,8 @@ jest.mock('./provider/reach-provider.js', () =>
             createAccount: mockStdlib.createAccount,
             protect: mockStdlib.protect,
             formatAddress: mockStdlib.formatAddress,
-            launchToken: mockStdlib.launchToken
+            launchToken: mockStdlib.launchToken,
+            algosdk: mockStdlib.algosdk
         })),
         getEnv: jest.fn().mockImplementation(() => 'TestNet')
     }))
@@ -423,6 +425,8 @@ describe('app', function () {
             expect(mockStdlib.launchToken).toHaveBeenCalledWith(expect.any(Object), 'project name', 'TRPRJ', {
                 decimals: 0,
                 manager: 'wallet_address',
+                clawback: 'wallet_address',
+                freeze: 'wallet_address',
                 reserve: 'reserve_address',
                 supply: 1,
                 url: 'token_url'
@@ -741,23 +745,40 @@ describe('app', function () {
                 creator: 'project creator'
             }))
 
-            const contractApi = {
-                Api: {
-                    updateName: jest.fn().mockImplementation(async () => Promise.resolve()),
-                    updateMetadata: jest.fn().mockImplementation(async () => Promise.resolve())
+            const view = {
+                View: {
+                    token: () => [0, { toNumber: () => 'project token id' }]
                 }
             }
+
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
+                networkAccount: { addr: 'wallet_address' },
                 contract: () => ({
-                    a: contractApi
+                    v: view
                 })
+            }))
+
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'project cid')
+
+            mockStdlib.getProvider.mockImplementation(() =>
+                Promise.resolve({
+                    algodClient: {
+                        getTransactionParams: () => ({ do: async () => Promise.resolve({ param: 'txn_param' }) }),
+                        sendRawTransaction: () => ({ do: async () => Promise.resolve({ txId: 'txn_id' }) })
+                    }
+                })
+            )
+
+            mockStdlib.algosdk.mockImplementation(() => ({
+                makeAssetConfigTxnWithSuggestedParamsFromObject: jest.fn().mockImplementation(() => ({
+                    signTxn: jest.fn().mockImplementation(() => 'signed_txn')
+                }))
             }))
 
             const response = await request(app.callback()).put('/projects/contract-id').send({
                 name: 'project name',
-                url: 'project url',
-                hash: 'project hash',
+                cid: 'project cid',
                 offChainImageUrl: 'off-chain url'
             })
 
@@ -767,15 +788,9 @@ describe('app', function () {
             expect(mockProjectRepository.updateProject).toHaveBeenCalledTimes(1)
             expect(mockProjectRepository.updateProject).toHaveBeenCalledWith({
                 contractId: 'contract-id',
-                name: 'project name',
+                cid: 'project cid',
                 offChainImageUrl: 'off-chain url'
             })
-
-            expect(contractApi.Api.updateName).toHaveBeenCalledTimes(1)
-            expect(contractApi.Api.updateName).toHaveBeenCalledWith('project name')
-
-            expect(contractApi.Api.updateMetadata).toHaveBeenCalledTimes(1)
-            expect(contractApi.Api.updateMetadata).toHaveBeenCalledWith('project url', 'project hash')
 
             expect(response.status).toBe(204)
             expect(response.body).toEqual({})

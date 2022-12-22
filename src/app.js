@@ -127,12 +127,16 @@ router.post('/projects', authHandler, bodyParser(), async ctx => {
         const cidFromAddress = cidFromAlgorandAddress(stdlib.algosdk, address)
         if (cid !== cidFromAddress) throw new Error('Error verifying cid')
 
+        const managerAddress = algoAccount.networkAccount.addr
+
         const token = await stdlib.launchToken(algoAccount, ctx.request.body.name, 'TRPRJ', {
             supply: 1,
             decimals: 0,
             url,
             reserve: address,
-            manager: algoAccount.networkAccount.addr
+            manager: managerAddress,
+            freeze: managerAddress,
+            clawback: managerAddress
         })
 
         tokenId = token.id.toNumber()
@@ -183,18 +187,11 @@ router.post('/projects', authHandler, bodyParser(), async ctx => {
 })
 
 router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
-    ctx.body = ''
-    if (!ctx.request.body.name && !ctx.request.body.url && !ctx.request.body.hash && !ctx.request.body.offChainImageUrl) {
-        ctx.status = 204
-        return
-    }
+    if (!ctx.request.body.name) throw new MissingParameterError('name')
+    if (!ctx.request.body.cid) throw new MissingParameterError('cid')
+    if (!ctx.request.body.offChainImageUrl) throw new MissingParameterError('offChainImageUrl')
 
-    if (ctx.request.body.url && !ctx.request.body.hash) throw new MissingParameterError('hash')
-    if (ctx.request.body.hash && !ctx.request.body.url) throw new MissingParameterError('url')
-
-    if (ctx.request.body.name && ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
-    if (ctx.request.body.url && ctx.request.body.url.length > 128) throw new ParameterTooLongError('url')
-    if (ctx.request.body.hash && ctx.request.body.hash.length > 64) throw new ParameterTooLongError('hash')
+    if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
     if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
 
     const repository = new ProjectRepository()
@@ -205,11 +202,38 @@ router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
     try {
         const stdlib = new ReachProvider().getStdlib()
         const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
+
         const infoObject = getContractFromJsonString(project.id)
         const contract = algoAccount.contract(backend, infoObject)
-        const api = contract.a.Api
-        if (ctx.request.body.name) await api.updateName(ctx.request.body.name)
-        if (ctx.request.body.url && ctx.request.body.hash) await api.updateMetadata(ctx.request.body.url, ctx.request.body.hash)
+        const view = contract.v.View
+
+        const tokenId = (await view.token())[1].toNumber()
+
+        const cid = ctx.request.body.cid
+        const { address } = algorandAddressFromCID(stdlib.algosdk, cid)
+        const cidFromAddress = cidFromAlgorandAddress(stdlib.algosdk, address)
+        if (cid !== cidFromAddress) throw new Error('Error verifying cid')
+
+        const algoClient = (await stdlib.getProvider()).algodClient
+        const params = await algoClient.getTransactionParams().do()
+        const managerAddress = algoAccount.networkAccount.addr
+
+        // The change has to come from the existing manager
+        const transaction = stdlib.algosdk.makeAssetConfigTxnWithSuggestedParamsFromObject({
+            assetIndex: tokenId,
+            from: managerAddress,
+            manager: managerAddress,
+            freeze: managerAddress,
+            clawback: managerAddress,
+            reserve: address,
+            suggestedParams: params
+        })
+
+        // This transaction must be signed by the current manager
+        const rawSignedTxn = transaction.signTxn(algoAccount.networkAccount.sk)
+
+        let txnResponse = await algoClient.sendRawTransaction(rawSignedTxn).do()
+        await stdlib.algosdk.waitForConfirmation(algoClient, txnResponse.txId, 4)
 
         await repository.updateProject({
             contractId: ctx.params.contractId,
