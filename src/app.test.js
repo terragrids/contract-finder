@@ -64,6 +64,15 @@ jest.mock('./utils/token-utils.js', () => ({
     cidFromAlgorandAddress: jest.fn().mockImplementation(() => '')
 }))
 
+const mockAlgoIndexer = {
+    callAlgonodeIndexerEndpoint: jest.fn().mockImplementation(() => jest.fn())
+}
+jest.mock('./network/algo-indexer.js', () =>
+    jest.fn().mockImplementation(() => ({
+        callAlgonodeIndexerEndpoint: mockAlgoIndexer.callAlgonodeIndexerEndpoint
+    }))
+)
+
 describe('app', function () {
     const OLD_ENV = process.env
 
@@ -382,6 +391,13 @@ describe('app', function () {
         })
 
         it('should return 201 when posting new project and all is fine', async () => {
+            mockStdlib.launchToken.mockImplementation(() => ({
+                id: { toNumber: () => 1234 }
+            }))
+
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'project cid')
+
             const adminInterface = {
                 Admin: ({ log, onReady }) => {
                     log('ready')
@@ -390,7 +406,7 @@ describe('app', function () {
             }
             const adminSpy = jest.spyOn(adminInterface, 'Admin')
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
+                networkAccount: { addr: 'wallet_address' },
                 contract: () => ({
                     p: adminInterface
                 })
@@ -398,19 +414,25 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
-                url: 'project url',
-                hash: 'project hash',
+                cid: 'project cid',
                 creator: 'project creator',
                 offChainImageUrl: 'image url'
+            })
+
+            expect(mockStdlib.launchToken).toHaveBeenCalledTimes(1)
+            expect(mockStdlib.launchToken).toHaveBeenCalledWith(expect.any(Object), 'project name', 'TRPRJ', {
+                decimals: 0,
+                manager: 'wallet_address',
+                reserve: 'reserve_address',
+                supply: 1,
+                url: 'token_url'
             })
 
             expect(adminSpy).toHaveBeenCalledTimes(1)
             expect(adminSpy).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    name: 'project name',
-                    url: 'project url',
-                    hash: 'project hash',
-                    creator: 'project creator'
+                    creator: 'project creator',
+                    token: 1234
                 })
             )
 
@@ -419,18 +441,64 @@ describe('app', function () {
                 contractId: 'ImNvbnRyYWN0Ig==',
                 creator: 'project creator',
                 name: 'project name',
-                offChainImageUrl: 'image url'
+                offChainImageUrl: 'image url',
+                tokenId: 1234
             })
 
             expect(response.status).toBe(201)
             expect(response.body).toEqual({
-                contractInfo: 'ImNvbnRyYWN0Ig=='
+                contractInfo: 'ImNvbnRyYWN0Ig==',
+                tokenId: 1234
+            })
+        })
+
+        it('should return 500 when launch token fails', async () => {
+            mockStdlib.launchToken.mockImplementation(() => {
+                throw new Error()
+            })
+
+            const response = await request(app.callback()).post('/projects').send({
+                name: 'project name',
+                cid: 'project cid',
+                creator: 'project creator',
+                offChainImageUrl: 'image url'
+            })
+
+            expect(response.status).toBe(500)
+            expect(response.body).toEqual({
+                error: 'MintTokenError',
+                message: 'Unable to mint token'
+            })
+        })
+
+        it('should return 500 when cid verification fails', async () => {
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'project meh')
+
+            const response = await request(app.callback()).post('/projects').send({
+                name: 'project name',
+                cid: 'project cid',
+                creator: 'project creator',
+                offChainImageUrl: 'image url'
+            })
+
+            expect(response.status).toBe(500)
+            expect(response.body).toEqual({
+                error: 'MintTokenError',
+                message: 'Unable to mint token'
             })
         })
 
         it('should return 500 when deploying contract fails', async () => {
+            mockStdlib.launchToken.mockImplementation(() => ({
+                id: { toNumber: () => 1234 }
+            }))
+
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'project cid')
+
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
+                networkAccount: { addr: 'wallet_address' },
                 contract: () => {
                     throw new Error()
                 }
@@ -438,9 +506,9 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
-                url: 'project url',
-                hash: 'project hash',
-                creator: 'project creator'
+                cid: 'project cid',
+                creator: 'project creator',
+                offChainImageUrl: 'image url'
             })
 
             expect(response.status).toBe(500)
@@ -451,8 +519,15 @@ describe('app', function () {
         })
 
         it('should return 500 when retrieving contract info fails', async () => {
+            mockStdlib.launchToken.mockImplementation(() => ({
+                id: { toNumber: () => 1234 }
+            }))
+
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'project cid')
+
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
+                networkAccount: { addr: 'wallet_address' },
                 contract: () => ({
                     p: {
                         Admin: ({ onReady }) => onReady(/* undefined contract */)
@@ -462,9 +537,9 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
-                url: 'project url',
-                hash: 'project hash',
-                creator: 'project creator'
+                cid: 'project cid',
+                creator: 'project creator',
+                offChainImageUrl: 'image url'
             })
 
             expect(response.status).toBe(500)
@@ -479,8 +554,15 @@ describe('app', function () {
                 throw new Error()
             })
 
+            mockStdlib.launchToken.mockImplementation(() => ({
+                id: { toNumber: () => 1234 }
+            }))
+
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'project cid')
+
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
+                networkAccount: { addr: 'wallet_address' },
                 contract: () => ({
                     p: {
                         Admin: ({ log, onReady }) => {
@@ -493,9 +575,9 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
-                url: 'project url',
-                hash: 'project hash',
-                creator: 'project creator'
+                cid: 'project cid',
+                creator: 'project creator',
+                offChainImageUrl: 'image url'
             })
 
             expect(response.status).toBe(500)
@@ -507,9 +589,9 @@ describe('app', function () {
 
         it('should return 400 when project name is missing', async () => {
             const response = await request(app.callback()).post('/projects').send({
-                url: 'project url',
-                hash: 'project hash',
-                creator: 'project creator'
+                cid: 'project cid',
+                creator: 'project creator',
+                offChainImageUrl: 'image url'
             })
 
             expect(response.status).toBe(400)
@@ -519,39 +601,39 @@ describe('app', function () {
             })
         })
 
-        it('should return 400 when project url is missing', async () => {
+        it('should return 400 when project cid is missing', async () => {
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
-                hash: 'project hash',
-                creator: 'project creator'
+                creator: 'project creator',
+                offChainImageUrl: 'image url'
             })
 
             expect(response.status).toBe(400)
             expect(response.body).toEqual({
                 error: 'MissingParameterError',
-                message: 'url must be specified'
+                message: 'cid must be specified'
             })
         })
 
-        it('should return 400 when project hash is missing', async () => {
+        it('should return 400 when project offChainImageUrl is missing', async () => {
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
-                url: 'project url',
+                cid: 'project cid',
                 creator: 'project creator'
             })
 
             expect(response.status).toBe(400)
             expect(response.body).toEqual({
                 error: 'MissingParameterError',
-                message: 'hash must be specified'
+                message: 'offChainImageUrl must be specified'
             })
         })
 
         it('should return 400 when project creator is missing', async () => {
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
-                url: 'project url',
-                hash: 'project hash'
+                cid: 'project cid',
+                offChainImageUrl: 'image url'
             })
 
             expect(response.status).toBe(400)
@@ -569,9 +651,9 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
-                url: 'project url',
-                hash: 'project hash',
-                creator: 'project creator'
+                cid: 'project cid',
+                creator: 'project creator',
+                offChainImageUrl: 'image url'
             })
 
             expect(response.status).toBe(403)
@@ -586,9 +668,9 @@ describe('app', function () {
                 .post('/projects')
                 .send({
                     name: '#'.repeat(129),
-                    url: 'project url',
-                    hash: 'project hash',
-                    creator: 'project creator'
+                    cid: 'project cid',
+                    creator: 'project creator',
+                    offChainImageUrl: 'image url'
                 })
 
             expect(response.status).toBe(400)
@@ -598,32 +680,14 @@ describe('app', function () {
             })
         })
 
-        it('should return 400 when project url is too long', async () => {
+        it('should return 400 when project offChainImageUrl is too long', async () => {
             const response = await request(app.callback())
                 .post('/projects')
                 .send({
                     name: 'project name',
-                    url: '#'.repeat(129),
-                    hash: 'project hash',
-                    creator: 'project creator'
-                })
-
-            expect(response.status).toBe(400)
-            expect(response.body).toEqual({
-                error: 'ParameterTooLongError',
-                message: 'url is too long'
-            })
-        })
-
-        it('should return 400 when off-chain project image url is too long', async () => {
-            const response = await request(app.callback())
-                .post('/projects')
-                .send({
-                    name: 'project name',
-                    url: 'project url',
-                    offChainImageUrl: '#'.repeat(129),
-                    hash: 'project hash',
-                    creator: 'project creator'
+                    cid: 'project cid',
+                    creator: 'project creator',
+                    offChainImageUrl: '#'.repeat(129)
                 })
 
             expect(response.status).toBe(400)
@@ -633,30 +697,13 @@ describe('app', function () {
             })
         })
 
-        it('should return 400 when project hash is too long', async () => {
-            const response = await request(app.callback())
-                .post('/projects')
-                .send({
-                    name: 'project name',
-                    url: 'project url',
-                    hash: '#'.repeat(65),
-                    creator: 'project creator'
-                })
-
-            expect(response.status).toBe(400)
-            expect(response.body).toEqual({
-                error: 'ParameterTooLongError',
-                message: 'hash is too long'
-            })
-        })
-
         it('should return 400 when project creator is too long', async () => {
             const response = await request(app.callback())
                 .post('/projects')
                 .send({
                     name: 'project name',
-                    url: 'project url',
-                    hash: 'project hash',
+                    cid: 'project cid',
+                    offChainImageUrl: 'project url',
                     creator: '#'.repeat(65)
                 })
 
@@ -674,9 +721,9 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
-                url: 'project url',
-                hash: 'project hash',
-                creator: 'project creator'
+                cid: 'project cid',
+                creator: 'project creator',
+                offChainImageUrl: 'image url'
             })
 
             expect(response.status).toBe(400)
@@ -1167,9 +1214,8 @@ describe('app', function () {
 
             const view = {
                 View: {
-                    name: () => [0, 'project name'],
-                    url: () => [0, 'project url'],
-                    hash: () => [0, 'project hash'],
+                    balance: () => [0, { toNumber: () => 123 }],
+                    token: () => [0, { toNumber: () => 'project token id' }],
                     creator: () => [0, 'project creator']
                 }
             }
@@ -1180,6 +1226,25 @@ describe('app', function () {
                     v: view
                 })
             }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
+                return Promise.resolve({
+                    status: 200,
+                    json: {
+                        asset: {
+                            index: 123,
+                            params: {
+                                name: 'project name',
+                                total: 1,
+                                decimals: 0,
+                                'unit-name': 'TRPRJ',
+                                url: 'project url',
+                                reserve: 'project reserve'
+                            }
+                        }
+                    }
+                })
+            })
 
             const response = await request(app.callback()).get('/projects/contract-id')
 
@@ -1192,8 +1257,10 @@ describe('app', function () {
                 creator: 'formatted project creator',
                 created: 'creation-date',
                 name: 'project name',
-                hash: 'project hash',
-                url: 'project url'
+                url: 'project url',
+                reserve: 'project reserve',
+                tokenId: 'project token id',
+                balance: 123
             })
         })
 
@@ -1216,6 +1283,100 @@ describe('app', function () {
             expect(response.body).toEqual({
                 error: 'ReadContractError',
                 message: 'Unable to read project contract'
+            })
+        })
+
+        it('should return 404 when getting project and token not found', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                created: 'creation-date',
+                creator: 'creator'
+            }))
+
+            const view = {
+                View: {
+                    balance: () => [0, { toNumber: () => 123 }],
+                    token: () => [0, { toNumber: () => 'project token id' }],
+                    creator: () => [0, 'project creator']
+                }
+            }
+
+            mockStdlib.createAccount.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    v: view
+                })
+            }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
+                return Promise.resolve({
+                    status: 200,
+                    json: {
+                        asset: {
+                            index: 123,
+                            deleted: true,
+                            params: {
+                                name: 'project name',
+                                total: 1,
+                                decimals: 0,
+                                'unit-name': 'TRPRJ',
+                                url: 'project url',
+                                reserve: 'project reserve'
+                            }
+                        }
+                    }
+                })
+            })
+
+            const response = await request(app.callback()).get('/projects/contract-id')
+
+            expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+
+            expect(response.status).toBe(404)
+            expect(response.body).toEqual({
+                error: 'AssetNotFoundError',
+                message: 'Asset specified not found'
+            })
+        })
+
+        it('should return 404 when getting project and token deleted', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                created: 'creation-date',
+                creator: 'creator'
+            }))
+
+            const view = {
+                View: {
+                    balance: () => [0, { toNumber: () => 123 }],
+                    token: () => [0, { toNumber: () => 'project token id' }],
+                    creator: () => [0, 'project creator']
+                }
+            }
+
+            mockStdlib.createAccount.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    v: view
+                })
+            }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
+                return Promise.resolve({
+                    status: 404
+                })
+            })
+
+            const response = await request(app.callback()).get('/projects/contract-id')
+
+            expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+
+            expect(response.status).toBe(404)
+            expect(response.body).toEqual({
+                error: 'AssetNotFoundError',
+                message: 'Asset specified not found'
             })
         })
     })

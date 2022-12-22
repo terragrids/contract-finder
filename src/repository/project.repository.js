@@ -33,6 +33,7 @@ export default class ProjectRepository extends DynamoDbRepository {
                     id: contractId,
                     creator: data.Item.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
                     created: data.Item.data.S.replace(`${this.itemName}|created|`, ''),
+                    name: data.Item.name.S,
                     ...(data.Item.offChainImageUrl && data.Item.offChainImageUrl.S && { offChainImageUrl: data.Item.offChainImageUrl.S })
                 }
             }
