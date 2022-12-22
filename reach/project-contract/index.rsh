@@ -97,18 +97,27 @@ export const main = Reach.App(() => {
             }
         )
         /**
-         * Pay balance into creator's wallet
+         * Pay balance into creator's wallet only if:
+         * 1/ The caller is the admin or the project creator
+         * 2/ The project has been approved, i.e. the token has been paid to the creator
          */
         .api(
             Api.payBalance,
             () => {
-                assume(this == A)
+                const isApproved = tokenBalance == 0
+                const isAdmin = this == A
+                const isCreator = this == creator
+                const isAllowed = isAdmin || isCreator
+                assume(isApproved && isAllowed)
             },
             () => 0,
             k => {
+                const isApproved = tokenBalance == 0
                 const isAdmin = this == A
-                require(isAdmin)
-                k(isAdmin)
+                const isCreator = this == creator
+                const isAllowed = isAdmin || isCreator
+                require(isApproved && isAllowed)
+                k(true)
                 transfer(paid).to(creator)
                 return [false, 0, tokenBalance]
             }
