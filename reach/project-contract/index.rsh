@@ -31,7 +31,8 @@ export const main = Reach.App(() => {
     const ProjectView = View('View', {
         creator: Address,
         balance: UInt,
-        token: Token
+        token: Token,
+        tokenBalance: UInt
     })
 
     const Api = API('Api', {
@@ -62,6 +63,7 @@ export const main = Reach.App(() => {
             ProjectView.creator.set(creator)
             ProjectView.balance.set(balance())
             ProjectView.token.set(token)
+            ProjectView.tokenBalance.set(balance(token))
         })
         .invariant(balance() == paid && balance(token) == tokenBalance)
         .while(!done)
