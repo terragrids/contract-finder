@@ -238,6 +238,7 @@ router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
         await repository.updateProject({
             contractId: ctx.params.contractId,
             name: ctx.request.body.name,
+            cid: ctx.request.body.cid,
             offChainImageUrl: ctx.request.body.offChainImageUrl
         })
 

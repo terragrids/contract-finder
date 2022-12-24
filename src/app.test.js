@@ -9,7 +9,9 @@ const mockStdlib = {
     protect: jest.fn().mockImplementation(() => jest.fn()),
     formatAddress: jest.fn().mockImplementation(() => jest.fn()),
     launchToken: jest.fn().mockImplementation(() => jest.fn()),
-    algosdk: jest.fn().mockImplementation(() => jest.fn())
+    algosdk: jest.fn().mockImplementation(() => jest.fn()),
+    makeAssetConfigTxnWithSuggestedParamsFromObject: jest.fn().mockImplementation(() => jest.fn()),
+    waitForConfirmation: jest.fn().mockImplementation(() => jest.fn())
 }
 
 jest.mock('./provider/reach-provider.js', () =>
@@ -22,7 +24,10 @@ jest.mock('./provider/reach-provider.js', () =>
             protect: mockStdlib.protect,
             formatAddress: mockStdlib.formatAddress,
             launchToken: mockStdlib.launchToken,
-            algosdk: mockStdlib.algosdk
+            algosdk: {
+                makeAssetConfigTxnWithSuggestedParamsFromObject: mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject,
+                waitForConfirmation: mockStdlib.waitForConfirmation
+            }
         })),
         getEnv: jest.fn().mockImplementation(() => 'TestNet')
     }))
@@ -752,7 +757,7 @@ describe('app', function () {
             }
 
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address' },
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
                 contract: () => ({
                     v: view
                 })
@@ -770,10 +775,10 @@ describe('app', function () {
                 })
             )
 
-            mockStdlib.algosdk.mockImplementation(() => ({
-                makeAssetConfigTxnWithSuggestedParamsFromObject: jest.fn().mockImplementation(() => ({
-                    signTxn: jest.fn().mockImplementation(() => 'signed_txn')
-                }))
+            const mockSignedTnx = jest.fn().mockImplementation(() => 'signed_txn')
+
+            mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject.mockImplementation(() => ({
+                signTxn: mockSignedTnx
             }))
 
             const response = await request(app.callback()).put('/projects/contract-id').send({
@@ -785,112 +790,32 @@ describe('app', function () {
             expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
             expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
 
+            expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledTimes(1)
+            expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledWith({
+                assetIndex: 'project token id',
+                clawback: 'wallet_address',
+                freeze: 'wallet_address',
+                from: 'wallet_address',
+                manager: 'wallet_address',
+                reserve: 'reserve_address',
+                suggestedParams: {
+                    param: 'txn_param'
+                }
+            })
+
+            expect(mockSignedTnx).toHaveBeenCalledTimes(1)
+            expect(mockSignedTnx).toHaveBeenCalledWith('account_sk')
+
+            expect(mockStdlib.waitForConfirmation).toHaveBeenCalledTimes(1)
+            expect(mockStdlib.waitForConfirmation).toHaveBeenCalledWith(expect.any(Object), 'txn_id', 4)
+
             expect(mockProjectRepository.updateProject).toHaveBeenCalledTimes(1)
             expect(mockProjectRepository.updateProject).toHaveBeenCalledWith({
                 contractId: 'contract-id',
                 cid: 'project cid',
+                name: 'project name',
                 offChainImageUrl: 'off-chain url'
             })
-
-            expect(response.status).toBe(204)
-            expect(response.body).toEqual({})
-        })
-
-        it('should return 204 when updating project name and all is fine', async () => {
-            mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
-                creator: 'project creator'
-            }))
-
-            const contractApi = {
-                Api: {
-                    updateName: jest.fn().mockImplementation(async () => Promise.resolve()),
-                    updateMetadata: jest.fn().mockImplementation(async () => Promise.resolve())
-                }
-            }
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    a: contractApi
-                })
-            }))
-
-            const response = await request(app.callback()).put('/projects/contract-id').send({
-                name: 'project name'
-            })
-
-            expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
-            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
-
-            expect(contractApi.Api.updateName).toHaveBeenCalledTimes(1)
-            expect(contractApi.Api.updateName).toHaveBeenCalledWith('project name')
-
-            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
-
-            expect(response.status).toBe(204)
-            expect(response.body).toEqual({})
-        })
-
-        it('should return 204 when updating project metadata and all is fine', async () => {
-            mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
-                creator: 'project creator'
-            }))
-
-            const contractApi = {
-                Api: {
-                    updateName: jest.fn().mockImplementation(async () => Promise.resolve()),
-                    updateMetadata: jest.fn().mockImplementation(async () => Promise.resolve())
-                }
-            }
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    a: contractApi
-                })
-            }))
-
-            const response = await request(app.callback()).put('/projects/contract-id').send({
-                url: 'project url',
-                hash: 'project hash'
-            })
-
-            expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
-            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
-
-            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
-
-            expect(contractApi.Api.updateMetadata).toHaveBeenCalledTimes(1)
-            expect(contractApi.Api.updateMetadata).toHaveBeenCalledWith('project url', 'project hash')
-
-            expect(response.status).toBe(204)
-            expect(response.body).toEqual({})
-        })
-
-        it('should return 204 when updating no project properties', async () => {
-            mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
-                creator: 'project creator'
-            }))
-
-            const contractApi = {
-                Api: {
-                    updateName: jest.fn(),
-                    updateMetadata: jest.fn()
-                }
-            }
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    a: contractApi
-                })
-            }))
-
-            const response = await request(app.callback()).put('/projects/contract-id')
-
-            expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
 
             expect(response.status).toBe(204)
             expect(response.body).toEqual({})
@@ -907,23 +832,9 @@ describe('app', function () {
                 creator: 'project creator'
             }))
 
-            const contractApi = {
-                Api: {
-                    updateName: jest.fn(),
-                    updateMetadata: jest.fn()
-                }
-            }
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    a: contractApi
-                })
-            }))
-
             const response = await request(app.callback()).put('/projects/contract-id').send({
                 name: 'project name',
-                url: 'project url',
-                hash: 'project hash',
+                cid: 'project cid',
                 offChainImageUrl: 'off-chain url'
             })
 
@@ -931,8 +842,6 @@ describe('app', function () {
             expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
 
             expect(mockProjectRepository.updateProject).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
 
             expect(response.status).toBe(403)
             expect(response.body).toEqual({
@@ -941,69 +850,60 @@ describe('app', function () {
             })
         })
 
-        it('should return 400 when updating url project property without hash', async () => {
+        it('should return 400 when updating url project property without cid', async () => {
             mockProjectRepository.getProject.mockImplementation(() => ({
                 id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
             }))
 
-            const contractApi = {
-                Api: {
-                    updateName: jest.fn(),
-                    updateMetadata: jest.fn()
-                }
-            }
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    a: contractApi
-                })
-            }))
-
             const response = await request(app.callback()).put('/projects/contract-id').send({
-                url: 'url'
+                name: 'project name',
+                offChainImageUrl: 'off-chain url'
             })
 
             expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
 
             expect(response.status).toBe(400)
             expect(response.body).toEqual({
                 error: 'MissingParameterError',
-                message: 'hash must be specified'
+                message: 'cid must be specified'
             })
         })
 
-        it('should return 400 when updating hash project property without url', async () => {
+        it('should return 400 when updating url project property without off-chain url', async () => {
             mockProjectRepository.getProject.mockImplementation(() => ({
                 id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
             }))
 
-            const contractApi = {
-                Api: {
-                    updateName: jest.fn(),
-                    updateMetadata: jest.fn()
-                }
-            }
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    a: contractApi
-                })
-            }))
-
             const response = await request(app.callback()).put('/projects/contract-id').send({
-                hash: 'hash'
+                name: 'project name',
+                cid: 'project cid'
             })
 
             expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
 
             expect(response.status).toBe(400)
             expect(response.body).toEqual({
                 error: 'MissingParameterError',
-                message: 'url must be specified'
+                message: 'offChainImageUrl must be specified'
+            })
+        })
+
+        it('should return 400 when updating url project property without name', async () => {
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            }))
+
+            const response = await request(app.callback()).put('/projects/contract-id').send({
+                cid: 'project cid',
+                offChainImageUrl: 'off-chain url'
+            })
+
+            expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'name must be specified'
             })
         })
 
@@ -1012,28 +912,15 @@ describe('app', function () {
                 id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
             }))
 
-            const contractApi = {
-                Api: {
-                    updateName: jest.fn(),
-                    updateMetadata: jest.fn()
-                }
-            }
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    a: contractApi
-                })
-            }))
-
             const response = await request(app.callback())
                 .put('/projects/contract-id')
                 .send({
-                    name: '#'.repeat(129)
+                    name: '#'.repeat(129),
+                    cid: 'project cid',
+                    offChainImageUrl: 'off-chain url'
                 })
 
             expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
 
             expect(response.status).toBe(400)
             expect(response.body).toEqual({
@@ -1047,28 +934,15 @@ describe('app', function () {
                 id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
             }))
 
-            const contractApi = {
-                Api: {
-                    updateName: jest.fn(),
-                    updateMetadata: jest.fn()
-                }
-            }
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    a: contractApi
-                })
-            }))
-
             const response = await request(app.callback())
                 .put('/projects/contract-id')
                 .send({
+                    name: 'project name',
+                    cid: 'project cid',
                     offChainImageUrl: '#'.repeat(129)
                 })
 
             expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
 
             expect(response.status).toBe(400)
             expect(response.body).toEqual({
@@ -1077,101 +951,32 @@ describe('app', function () {
             })
         })
 
-        it('should return 400 when updating too long url project property', async () => {
-            mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-            }))
-
-            const contractApi = {
-                Api: {
-                    updateName: jest.fn(),
-                    updateMetadata: jest.fn()
-                }
-            }
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    a: contractApi
-                })
-            }))
-
-            const response = await request(app.callback())
-                .put('/projects/contract-id')
-                .send({
-                    url: '#'.repeat(129),
-                    hash: 'hash'
-                })
-
-            expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
-
-            expect(response.status).toBe(400)
-            expect(response.body).toEqual({
-                error: 'ParameterTooLongError',
-                message: 'url is too long'
-            })
-        })
-
-        it('should return 400 when updating too long hash project property', async () => {
-            mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-            }))
-
-            const contractApi = {
-                Api: {
-                    updateName: jest.fn(),
-                    updateMetadata: jest.fn()
-                }
-            }
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    a: contractApi
-                })
-            }))
-
-            const response = await request(app.callback())
-                .put('/projects/contract-id')
-                .send({
-                    url: 'url',
-                    hash: '#'.repeat(65)
-                })
-
-            expect(mockProjectRepository.getProject).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateName).not.toHaveBeenCalled()
-            expect(contractApi.Api.updateMetadata).not.toHaveBeenCalled()
-
-            expect(response.status).toBe(400)
-            expect(response.body).toEqual({
-                error: 'ParameterTooLongError',
-                message: 'hash is too long'
-            })
-        })
-
-        it('should return 500 when updating project name fails', async () => {
+        it('should return 500 when cid verification fails', async () => {
             mockProjectRepository.getProject.mockImplementation(() => ({
                 id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
                 creator: 'project creator'
             }))
 
-            const contractApi = {
-                Api: {
-                    updateName: jest.fn().mockImplementation(() => {
-                        throw new Error()
-                    }),
-                    updateMetadata: jest.fn()
+            const view = {
+                View: {
+                    token: () => [0, { toNumber: () => 'project token id' }]
                 }
             }
+
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
                 contract: () => ({
-                    a: contractApi
+                    v: view
                 })
             }))
 
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'project meh')
+
             const response = await request(app.callback()).put('/projects/contract-id').send({
-                name: 'name'
+                name: 'project name',
+                cid: 'project cid',
+                offChainImageUrl: 'off-chain url'
             })
 
             expect(response.status).toBe(500)
@@ -1181,30 +986,47 @@ describe('app', function () {
             })
         })
 
-        it('should return 500 when updating project metadata fails', async () => {
+        it('should return 500 when asset config transaction fails', async () => {
             mockProjectRepository.getProject.mockImplementation(() => ({
                 id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
                 creator: 'project creator'
             }))
 
-            const contractApi = {
-                Api: {
-                    updateName: jest.fn(),
-                    updateMetadata: jest.fn().mockImplementation(() => {
-                        throw new Error()
-                    })
+            const view = {
+                View: {
+                    token: () => [0, { toNumber: () => 'project token id' }]
                 }
             }
+
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: {},
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
                 contract: () => ({
-                    a: contractApi
+                    v: view
                 })
             }))
 
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'project cid')
+
+            mockStdlib.getProvider.mockImplementation(() =>
+                Promise.resolve({
+                    algodClient: {
+                        getTransactionParams: () => ({ do: async () => Promise.resolve({ param: 'txn_param' }) }),
+                        sendRawTransaction: () => ({ do: async () => Promise.resolve({ txId: 'txn_id' }) })
+                    }
+                })
+            )
+
+            jest.fn().mockImplementation(() => 'signed_txn')
+
+            mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject.mockImplementation(() => {
+                throw new Error()
+            })
+
             const response = await request(app.callback()).put('/projects/contract-id').send({
-                url: 'url',
-                hash: 'hash'
+                name: 'project name',
+                cid: 'project cid',
+                offChainImageUrl: 'off-chain url'
             })
 
             expect(response.status).toBe(500)
