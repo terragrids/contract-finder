@@ -261,7 +261,7 @@ router.get('/projects', async ctx => {
 router.get('/projects/:contractId', async ctx => {
     const project = await new ProjectRepository().getProject(ctx.params.contractId)
 
-    let balance, tokenBalance, tokenId, creator
+    let balance, tokenBalance, tokenId, creator, approved
     try {
         const stdlib = new ReachProvider().getStdlib()
         const algoAccount = await stdlib.createAccount()
@@ -275,6 +275,7 @@ router.get('/projects/:contractId', async ctx => {
         tokenBalance = (await view.tokenBalance())[1].toNumber()
         tokenId = (await view.token())[1].toNumber()
         creator = stdlib.formatAddress((await view.creator())[1])
+        approved = (await view.approved())[1]
     } catch (e) {
         throw new ReadContractError(e)
     }
@@ -285,7 +286,8 @@ router.get('/projects/:contractId', async ctx => {
     ctx.body = {
         ...project,
         balance,
-        approved: tokenBalance === 0,
+        tokenPaid: tokenBalance === 0,
+        approved,
         tokenId,
         creator,
         name: indexerResponse.json.asset.params.name,

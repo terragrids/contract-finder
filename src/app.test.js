@@ -1054,7 +1054,8 @@ describe('app', function () {
                     balance: () => [0, { toNumber: () => 123 }],
                     tokenBalance: () => [0, { toNumber: () => 1 }],
                     token: () => [0, { toNumber: () => 'project token id' }],
-                    creator: () => [0, 'project creator']
+                    creator: () => [0, 'project creator'],
+                    approved: () => [0, true]
                 }
             }
 
@@ -1099,7 +1100,8 @@ describe('app', function () {
                 reserve: 'project reserve',
                 tokenId: 'project token id',
                 balance: 123,
-                approved: false
+                approved: true,
+                tokenPaid: false
             })
         })
 
@@ -1137,7 +1139,8 @@ describe('app', function () {
                     balance: () => [0, { toNumber: () => 123 }],
                     tokenBalance: () => [0, { toNumber: () => 0 }],
                     token: () => [0, { toNumber: () => 'project token id' }],
-                    creator: () => [0, 'project creator']
+                    creator: () => [0, 'project creator'],
+                    approved: () => [0, false]
                 }
             }
 
@@ -1192,7 +1195,8 @@ describe('app', function () {
                     balance: () => [0, { toNumber: () => 123 }],
                     tokenBalance: () => [0, { toNumber: () => 0 }],
                     token: () => [0, { toNumber: () => 'project token id' }],
-                    creator: () => [0, 'project creator']
+                    creator: () => [0, 'project creator'],
+                    approved: () => [0, false]
                 }
             }
 
