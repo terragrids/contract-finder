@@ -32,7 +32,8 @@ export const main = Reach.App(() => {
         creator: Address,
         balance: UInt,
         token: Token,
-        tokenBalance: UInt
+        tokenBalance: UInt,
+        approved: Bool
     })
 
     const Api = API('Api', {
@@ -40,6 +41,7 @@ export const main = Reach.App(() => {
         withdraw: Fun([], Bool),
         payBalance: Fun([], Bool),
         payToken: Fun([], Bool),
+        setApprovalState: Fun([Bool], Bool),
         stop: Fun([], Bool)
     })
 
@@ -58,12 +60,13 @@ export const main = Reach.App(() => {
     A.interact.onReady(getContract())
     A.interact.log('The project contract is ready')
 
-    const [done, paid, tokenBalance] = parallelReduce([false, 0, 1])
+    const [done, paid, tokenBalance, approved] = parallelReduce([false, 0, 1, false])
         .define(() => {
             ProjectView.creator.set(creator)
             ProjectView.balance.set(balance())
             ProjectView.token.set(token)
             ProjectView.tokenBalance.set(balance(token))
+            ProjectView.approved.set(approved)
         })
         .invariant(balance() == paid && balance(token) == tokenBalance)
         .while(!done)
@@ -75,7 +78,7 @@ export const main = Reach.App(() => {
             amount => amount,
             (amount, k) => {
                 k(true)
-                return [false, amount + paid, tokenBalance]
+                return [false, amount + paid, tokenBalance, approved]
             }
         )
         /**
@@ -93,37 +96,36 @@ export const main = Reach.App(() => {
                 k(isAdmin)
                 transfer(paid).to(A)
                 transfer(tokenBalance, token).to(A)
-                return [false, 0, 0]
+                return [false, 0, 0, approved]
             }
         )
         /**
          * Pay balance into creator's wallet only if:
          * 1/ The caller is the admin or the project creator
-         * 2/ The project has been approved, i.e. the token has been paid to the creator
+         * 2/ The project has been approved
          */
         .api(
             Api.payBalance,
             () => {
-                const isApproved = tokenBalance == 0
                 const isAdmin = this == A
                 const isCreator = this == creator
                 const isAllowed = isAdmin || isCreator
-                assume(isApproved && isAllowed)
+                assume(approved && isAllowed)
             },
             () => 0,
             k => {
-                const isApproved = tokenBalance == 0
                 const isAdmin = this == A
                 const isCreator = this == creator
                 const isAllowed = isAdmin || isCreator
-                require(isApproved && isAllowed)
+                require(approved && isAllowed)
                 k(true)
                 transfer(paid).to(creator)
-                return [false, 0, tokenBalance]
+                return [false, 0, tokenBalance, approved]
             }
         )
         /**
-         * Pay token into creator's wallet
+         * Pay token into creator's wallet and approve this project,
+         * only if the caller is this contract's admin.
          */
         .api(
             Api.payToken,
@@ -136,7 +138,24 @@ export const main = Reach.App(() => {
                 require(isAdmin)
                 k(isAdmin)
                 transfer(tokenBalance, token).to(creator)
-                return [false, paid, 0]
+                return [false, paid, 0, true]
+            }
+        )
+        /**
+         * Set approval state for this project,
+         * only if the caller is this contract's admin.
+         */
+        .api(
+            Api.setApprovalState,
+            _ => {
+                assume(this == A)
+            },
+            _ => 0,
+            (isApproved, k) => {
+                const isAdmin = this == A
+                require(isAdmin)
+                k(isAdmin)
+                return [false, paid, tokenBalance, isApproved]
             }
         )
         /**
@@ -152,7 +171,7 @@ export const main = Reach.App(() => {
                 const isAdmin = this == A
                 require(isAdmin)
                 k(isAdmin)
-                return [true, paid, tokenBalance]
+                return [true, paid, tokenBalance, approved]
             }
         )
         .timeout(false)
