@@ -8,13 +8,16 @@ export default class ProjectRepository extends DynamoDbRepository {
     itemName = 'project'
 
     async createProject({ contractId, name, offChainImageUrl, creator }) {
+        const now = Date.now()
+
         return await this.put({
             item: {
                 pk: { S: `${this.projectPrefix}|${contractId}` },
                 gsi1pk: { S: `${this.userPrefix}|${creator}` },
                 gsi2pk: { S: `type|${this.itemName}` },
-                data: { S: `${this.itemName}|created|${Date.now()}` },
-                name: { S: name },
+                data: { S: `${this.itemName}|created|${now}` },
+                created: { S: now },
+                name: { N: name.toString() },
                 offChainImageUrl: { S: offChainImageUrl }
             },
             itemLogName: this.itemName
@@ -32,8 +35,9 @@ export default class ProjectRepository extends DynamoDbRepository {
                 return {
                     id: contractId,
                     creator: data.Item.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
-                    created: data.Item.data.S.replace(`${this.itemName}|created|`, ''),
                     name: data.Item.name.S,
+                    ...(data.Item.created && { created: parseInt(data.Item.created.N) }),
+                    ...(data.Item.deleted && { deleted: parseInt(data.Item.deleted.N) }),
                     ...(data.Item.offChainImageUrl && data.Item.offChainImageUrl.S && { offChainImageUrl: data.Item.offChainImageUrl.S })
                 }
             }
@@ -109,6 +113,30 @@ export default class ProjectRepository extends DynamoDbRepository {
                 ...(project.offChainImageUrl && { offChainImageUrl: project.offChainImageUrl.S })
             })),
             ...(data.nextPageKey && { nextPageKey: data.nextPageKey })
+        }
+    }
+
+    async deleteProject(contractId, permanent = false) {
+        try {
+            if (permanent) {
+                await this.delete({
+                    key: { pk: { S: `${this.projectPrefix}|${contractId}` } },
+                    itemLogName: this.itemName
+                })
+            } else {
+                const now = Date.now()
+                await this.update({
+                    key: { pk: { S: `${this.projectPrefix}|${contractId}` } },
+                    attributes: {
+                        '#data': { S: `${this.itemName}|deleted|${now}` },
+                        deleted: { N: now.toString() }
+                    },
+                    itemLogName: this.itemName
+                })
+            }
+        } catch (e) {
+            if (e instanceof ConditionalCheckFailedException) throw new ProjectNotFoundError()
+            else throw e
         }
     }
 }

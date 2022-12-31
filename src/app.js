@@ -24,6 +24,7 @@ import MintTokenError from './error/mint-token.error.js'
 import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-utils.js'
 import AlgoIndexer from './network/algo-indexer.js'
 import AssetNotFoundError from './error/asset-not-found.error.js'
+import ContractIdMalformedError from './error/contract-id-malformed.error.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -304,6 +305,33 @@ router.get('/creators/:creatorId/projects', async ctx => {
         nextPageKey: ctx.request.query.nextPageKey
     })
     ctx.body = projects
+    ctx.status = 200
+})
+
+router.delete('/projects/:contractId', async ctx => {
+    await new ProjectRepository().deleteProject(ctx.params.contractId, ctx.request.query.permanent === 'true')
+
+    const stdlib = new ReachProvider().getStdlib()
+    const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
+
+    let infoObject
+    try {
+        infoObject = getContractFromJsonString(ctx.params.contractId)
+    } catch (e) {
+        throw new ContractIdMalformedError()
+    }
+
+    let contractDeleted
+    try {
+        const contract = algoAccount.contract(backend, infoObject)
+        const api = contract.a.Api
+        await api.stop()
+        contractDeleted = true
+    } catch (e) {
+        contractDeleted = false
+    }
+
+    ctx.body = { contractDeleted }
     ctx.status = 200
 })
 
