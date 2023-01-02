@@ -823,6 +823,89 @@ describe('app', function () {
             expect(response.body).toEqual({})
         })
 
+        it('should return 204 when updating all project properties and user is admin', async () => {
+            process.env.ADMIN_WALLETS = 'admin_wallet,super_wallet'
+            authHandler.mockImplementation(async (ctx, next) => {
+                ctx.state.account = 'admin_wallet'
+                await next()
+            })
+
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                creator: 'project creator'
+            }))
+
+            const view = {
+                View: {
+                    token: () => [0, { toNumber: () => 'project token id' }]
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
+                contract: () => ({
+                    v: view
+                })
+            }))
+
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'project cid')
+
+            mockStdlib.getProvider.mockImplementation(() =>
+                Promise.resolve({
+                    algodClient: {
+                        getTransactionParams: () => ({ do: async () => Promise.resolve({ param: 'txn_param' }) }),
+                        sendRawTransaction: () => ({ do: async () => Promise.resolve({ txId: 'txn_id' }) })
+                    }
+                })
+            )
+
+            const mockSignedTnx = jest.fn().mockImplementation(() => 'signed_txn')
+
+            mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject.mockImplementation(() => ({
+                signTxn: mockSignedTnx
+            }))
+
+            const response = await request(app.callback()).put('/projects/contract-id').send({
+                name: 'project name',
+                cid: 'project cid',
+                offChainImageUrl: 'off-chain url'
+            })
+
+            expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+
+            expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledTimes(1)
+            expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledWith({
+                assetIndex: 'project token id',
+                clawback: 'wallet_address',
+                freeze: 'wallet_address',
+                from: 'wallet_address',
+                manager: 'wallet_address',
+                reserve: 'reserve_address',
+                suggestedParams: {
+                    param: 'txn_param'
+                }
+            })
+
+            expect(mockSignedTnx).toHaveBeenCalledTimes(1)
+            expect(mockSignedTnx).toHaveBeenCalledWith('account_sk')
+
+            expect(mockStdlib.waitForConfirmation).toHaveBeenCalledTimes(1)
+            expect(mockStdlib.waitForConfirmation).toHaveBeenCalledWith(expect.any(Object), 'txn_id', 4)
+
+            expect(mockProjectRepository.updateProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.updateProject).toHaveBeenCalledWith({
+                contractId: 'contract-id',
+                cid: 'project cid',
+                name: 'project name',
+                offChainImageUrl: 'off-chain url'
+            })
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
         it('should return 403 when updating project with unauthorized user', async () => {
             authHandler.mockImplementation(async (ctx, next) => {
                 ctx.state.account = 'bogus user'

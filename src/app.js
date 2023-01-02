@@ -199,7 +199,7 @@ router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
     const repository = new ProjectRepository()
     const project = await repository.getProject(ctx.params.contractId)
 
-    if (ctx.state.account !== project.creator) throw new UserUnauthorizedError()
+    if (ctx.state.account !== project.creator && !isAdminWallet(ctx.state.account)) throw new UserUnauthorizedError()
 
     try {
         const stdlib = new ReachProvider().getStdlib()
