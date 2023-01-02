@@ -1343,6 +1343,31 @@ describe('app', function () {
             expect(response.body).toEqual({ contractDeleted: true })
         })
 
+        it('should return 200 when permanently deleting project and can stop contract', async () => {
+            const api = {
+                Api: {
+                    stop: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).delete('/projects/eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9?permanent=true')
+
+            expect(mockProjectRepository.deleteProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.deleteProject).toHaveBeenCalledWith('eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9', true)
+
+            expect(api.Api.stop).toHaveBeenCalledTimes(1)
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({ contractDeleted: true })
+        })
+
         it('should return 200 when deleting project and cannot stop contract', async () => {
             const api = {
                 Api: {
