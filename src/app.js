@@ -25,6 +25,7 @@ import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-ut
 import AlgoIndexer from './network/algo-indexer.js'
 import AssetNotFoundError from './error/asset-not-found.error.js'
 import ContractIdMalformedError from './error/contract-id-malformed.error.js'
+import { isAdminWallet } from './utils/wallet-utils.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -308,7 +309,9 @@ router.get('/creators/:creatorId/projects', async ctx => {
     ctx.status = 200
 })
 
-router.delete('/projects/:contractId', async ctx => {
+router.delete('/projects/:contractId', authHandler, async ctx => {
+    if (!isAdminWallet(ctx.state.account)) throw new UserUnauthorizedError()
+
     let infoObject
     try {
         infoObject = getContractFromJsonString(ctx.params.contractId)

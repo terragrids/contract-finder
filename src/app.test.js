@@ -1310,6 +1310,14 @@ describe('app', function () {
     })
 
     describe('delete project endpoint', function () {
+        beforeEach(() => {
+            process.env.ADMIN_WALLETS = 'admin_wallet,super_wallet'
+            authHandler.mockImplementation(async (ctx, next) => {
+                ctx.state.account = 'admin_wallet'
+                await next()
+            })
+        })
+
         it('should return 200 when deleting project and can stop contract', async () => {
             const api = {
                 Api: {
@@ -1383,6 +1391,37 @@ describe('app', function () {
             expect(response.body).toEqual({
                 error: 'ContractIdMalformedError',
                 message: 'The specified contract identifier is malformed'
+            })
+        })
+
+        it('should return 403 when deleting project and user is not admin', async () => {
+            authHandler.mockImplementation(async (ctx, next) => {
+                ctx.state.account = 'bad_wallet'
+                await next()
+            })
+
+            const api = {
+                Api: {
+                    stop: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).delete('/projects/contract-id')
+
+            expect(mockProjectRepository.deleteProject).not.toHaveBeenCalled()
+            expect(api.Api.stop).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(403)
+            expect(response.body).toEqual({
+                error: 'UserUnauthorizedError',
+                message: 'The authenticated user is not authorized to perform this action'
             })
         })
     })
