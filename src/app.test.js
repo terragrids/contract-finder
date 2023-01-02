@@ -47,7 +47,8 @@ const mockProjectRepository = {
     updateProject: jest.fn().mockImplementation(() => jest.fn()),
     getProject: jest.fn().mockImplementation(() => jest.fn()),
     getProjects: jest.fn().mockImplementation(() => jest.fn()),
-    getProjectsByCreator: jest.fn().mockImplementation(() => jest.fn())
+    getProjectsByCreator: jest.fn().mockImplementation(() => jest.fn()),
+    deleteProject: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/project.repository.js', () =>
     jest.fn().mockImplementation(() => ({
@@ -55,7 +56,8 @@ jest.mock('./repository/project.repository.js', () =>
         updateProject: mockProjectRepository.updateProject,
         getProject: mockProjectRepository.getProject,
         getProjects: mockProjectRepository.getProjects,
-        getProjectsByCreator: mockProjectRepository.getProjectsByCreator
+        getProjectsByCreator: mockProjectRepository.getProjectsByCreator,
+        deleteProject: mockProjectRepository.deleteProject
     }))
 )
 
@@ -1303,6 +1305,84 @@ describe('app', function () {
                         created: 'contract-date-2'
                     }
                 ]
+            })
+        })
+    })
+
+    describe('delete project endpoint', function () {
+        it('should return 200 when deleting project and can stop contract', async () => {
+            const api = {
+                Api: {
+                    stop: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).delete('/projects/eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9')
+
+            expect(mockProjectRepository.deleteProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.deleteProject).toHaveBeenCalledWith('eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9', false)
+
+            expect(api.Api.stop).toHaveBeenCalledTimes(1)
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({ contractDeleted: true })
+        })
+
+        it('should return 200 when deleting project and cannot stop contract', async () => {
+            const api = {
+                Api: {
+                    stop: jest.fn().mockImplementation(() => Promise.reject())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).delete('/projects/eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9')
+
+            expect(mockProjectRepository.deleteProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.deleteProject).toHaveBeenCalledWith('eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9', false)
+
+            expect(api.Api.stop).toHaveBeenCalledTimes(1)
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({ contractDeleted: false })
+        })
+
+        it('should return 400 when deleting project and contract id is malformed', async () => {
+            const api = {
+                Api: {
+                    stop: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).delete('/projects/contract-id')
+
+            expect(mockProjectRepository.deleteProject).not.toHaveBeenCalled()
+            expect(api.Api.stop).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ContractIdMalformedError',
+                message: 'The specified contract identifier is malformed'
             })
         })
     })

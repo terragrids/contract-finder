@@ -4,8 +4,17 @@
     "files.trimFinalNewlines": true,
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "esbenp.prettier-vscode",
-    "cSpell.enableFiletypes": ["javascript"],
-    "cSpell.words": ["algonode", "algorand", "algosdk", "bodyparser", "terragrids", "TRPRJ"],
+    "cSpell.enableFiletypes": [
+        "javascript"
+    ],
+    "cSpell.words": [
+        "algonode",
+        "algorand",
+        "algosdk",
+        "bodyparser",
+        "terragrids",
+        "TRPRJ"
+    ],
     "files.associations": {
         "*.rsh": "javascript"
     },

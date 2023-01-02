@@ -309,17 +309,17 @@ router.get('/creators/:creatorId/projects', async ctx => {
 })
 
 router.delete('/projects/:contractId', async ctx => {
-    await new ProjectRepository().deleteProject(ctx.params.contractId, ctx.request.query.permanent === 'true')
-
-    const stdlib = new ReachProvider().getStdlib()
-    const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
-
     let infoObject
     try {
         infoObject = getContractFromJsonString(ctx.params.contractId)
     } catch (e) {
         throw new ContractIdMalformedError()
     }
+
+    await new ProjectRepository().deleteProject(ctx.params.contractId, ctx.request.query.permanent === 'true')
+
+    const stdlib = new ReachProvider().getStdlib()
+    const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
 
     let contractDeleted
     try {
