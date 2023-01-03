@@ -47,7 +47,8 @@ const mockProjectRepository = {
     updateProject: jest.fn().mockImplementation(() => jest.fn()),
     getProject: jest.fn().mockImplementation(() => jest.fn()),
     getProjects: jest.fn().mockImplementation(() => jest.fn()),
-    getProjectsByCreator: jest.fn().mockImplementation(() => jest.fn())
+    getProjectsByCreator: jest.fn().mockImplementation(() => jest.fn()),
+    deleteProject: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/project.repository.js', () =>
     jest.fn().mockImplementation(() => ({
@@ -55,7 +56,8 @@ jest.mock('./repository/project.repository.js', () =>
         updateProject: mockProjectRepository.updateProject,
         getProject: mockProjectRepository.getProject,
         getProjects: mockProjectRepository.getProjects,
-        getProjectsByCreator: mockProjectRepository.getProjectsByCreator
+        getProjectsByCreator: mockProjectRepository.getProjectsByCreator,
+        deleteProject: mockProjectRepository.deleteProject
     }))
 )
 
@@ -821,6 +823,89 @@ describe('app', function () {
             expect(response.body).toEqual({})
         })
 
+        it('should return 204 when updating all project properties and user is admin', async () => {
+            process.env.ADMIN_WALLETS = 'admin_wallet,super_wallet'
+            authHandler.mockImplementation(async (ctx, next) => {
+                ctx.state.account = 'admin_wallet'
+                await next()
+            })
+
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                creator: 'project creator'
+            }))
+
+            const view = {
+                View: {
+                    token: () => [0, { toNumber: () => 'project token id' }]
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
+                contract: () => ({
+                    v: view
+                })
+            }))
+
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'project cid')
+
+            mockStdlib.getProvider.mockImplementation(() =>
+                Promise.resolve({
+                    algodClient: {
+                        getTransactionParams: () => ({ do: async () => Promise.resolve({ param: 'txn_param' }) }),
+                        sendRawTransaction: () => ({ do: async () => Promise.resolve({ txId: 'txn_id' }) })
+                    }
+                })
+            )
+
+            const mockSignedTnx = jest.fn().mockImplementation(() => 'signed_txn')
+
+            mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject.mockImplementation(() => ({
+                signTxn: mockSignedTnx
+            }))
+
+            const response = await request(app.callback()).put('/projects/contract-id').send({
+                name: 'project name',
+                cid: 'project cid',
+                offChainImageUrl: 'off-chain url'
+            })
+
+            expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+
+            expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledTimes(1)
+            expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledWith({
+                assetIndex: 'project token id',
+                clawback: 'wallet_address',
+                freeze: 'wallet_address',
+                from: 'wallet_address',
+                manager: 'wallet_address',
+                reserve: 'reserve_address',
+                suggestedParams: {
+                    param: 'txn_param'
+                }
+            })
+
+            expect(mockSignedTnx).toHaveBeenCalledTimes(1)
+            expect(mockSignedTnx).toHaveBeenCalledWith('account_sk')
+
+            expect(mockStdlib.waitForConfirmation).toHaveBeenCalledTimes(1)
+            expect(mockStdlib.waitForConfirmation).toHaveBeenCalledWith(expect.any(Object), 'txn_id', 4)
+
+            expect(mockProjectRepository.updateProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.updateProject).toHaveBeenCalledWith({
+                contractId: 'contract-id',
+                cid: 'project cid',
+                name: 'project name',
+                offChainImageUrl: 'off-chain url'
+            })
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
         it('should return 403 when updating project with unauthorized user', async () => {
             authHandler.mockImplementation(async (ctx, next) => {
                 ctx.state.account = 'bogus user'
@@ -1303,6 +1388,148 @@ describe('app', function () {
                         created: 'contract-date-2'
                     }
                 ]
+            })
+        })
+    })
+
+    describe('delete project endpoint', function () {
+        beforeEach(() => {
+            process.env.ADMIN_WALLETS = 'admin_wallet,super_wallet'
+            authHandler.mockImplementation(async (ctx, next) => {
+                ctx.state.account = 'admin_wallet'
+                await next()
+            })
+        })
+
+        it('should return 200 when deleting project and can stop contract', async () => {
+            const api = {
+                Api: {
+                    stop: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).delete('/projects/eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9')
+
+            expect(mockProjectRepository.deleteProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.deleteProject).toHaveBeenCalledWith('eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9', false)
+
+            expect(api.Api.stop).toHaveBeenCalledTimes(1)
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({ contractDeleted: true })
+        })
+
+        it('should return 200 when permanently deleting project and can stop contract', async () => {
+            const api = {
+                Api: {
+                    stop: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).delete('/projects/eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9?permanent=true')
+
+            expect(mockProjectRepository.deleteProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.deleteProject).toHaveBeenCalledWith('eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9', true)
+
+            expect(api.Api.stop).toHaveBeenCalledTimes(1)
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({ contractDeleted: true })
+        })
+
+        it('should return 200 when deleting project and cannot stop contract', async () => {
+            const api = {
+                Api: {
+                    stop: jest.fn().mockImplementation(() => Promise.reject())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).delete('/projects/eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9')
+
+            expect(mockProjectRepository.deleteProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.deleteProject).toHaveBeenCalledWith('eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9', false)
+
+            expect(api.Api.stop).toHaveBeenCalledTimes(1)
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({ contractDeleted: false })
+        })
+
+        it('should return 400 when deleting project and contract id is malformed', async () => {
+            const api = {
+                Api: {
+                    stop: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).delete('/projects/contract-id')
+
+            expect(mockProjectRepository.deleteProject).not.toHaveBeenCalled()
+            expect(api.Api.stop).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ContractIdMalformedError',
+                message: 'The specified contract identifier is malformed'
+            })
+        })
+
+        it('should return 403 when deleting project and user is not admin', async () => {
+            authHandler.mockImplementation(async (ctx, next) => {
+                ctx.state.account = 'bad_wallet'
+                await next()
+            })
+
+            const api = {
+                Api: {
+                    stop: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).delete('/projects/contract-id')
+
+            expect(mockProjectRepository.deleteProject).not.toHaveBeenCalled()
+            expect(api.Api.stop).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(403)
+            expect(response.body).toEqual({
+                error: 'UserUnauthorizedError',
+                message: 'The authenticated user is not authorized to perform this action'
             })
         })
     })

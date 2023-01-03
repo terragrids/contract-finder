@@ -24,6 +24,8 @@ import MintTokenError from './error/mint-token.error.js'
 import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-utils.js'
 import AlgoIndexer from './network/algo-indexer.js'
 import AssetNotFoundError from './error/asset-not-found.error.js'
+import ContractIdMalformedError from './error/contract-id-malformed.error.js'
+import { isAdminWallet } from './utils/wallet-utils.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -197,7 +199,7 @@ router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
     const repository = new ProjectRepository()
     const project = await repository.getProject(ctx.params.contractId)
 
-    if (ctx.state.account !== project.creator) throw new UserUnauthorizedError()
+    if (ctx.state.account !== project.creator && !isAdminWallet(ctx.state.account)) throw new UserUnauthorizedError()
 
     try {
         const stdlib = new ReachProvider().getStdlib()
@@ -304,6 +306,35 @@ router.get('/creators/:creatorId/projects', async ctx => {
         nextPageKey: ctx.request.query.nextPageKey
     })
     ctx.body = projects
+    ctx.status = 200
+})
+
+router.delete('/projects/:contractId', authHandler, async ctx => {
+    if (!isAdminWallet(ctx.state.account)) throw new UserUnauthorizedError()
+
+    let infoObject
+    try {
+        infoObject = getContractFromJsonString(ctx.params.contractId)
+    } catch (e) {
+        throw new ContractIdMalformedError()
+    }
+
+    await new ProjectRepository().deleteProject(ctx.params.contractId, ctx.request.query.permanent === 'true')
+
+    const stdlib = new ReachProvider().getStdlib()
+    const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
+
+    let contractDeleted
+    try {
+        const contract = algoAccount.contract(backend, infoObject)
+        const api = contract.a.Api
+        await api.stop()
+        contractDeleted = true
+    } catch (e) {
+        contractDeleted = false
+    }
+
+    ctx.body = { contractDeleted }
     ctx.status = 200
 })
 
