@@ -37,7 +37,7 @@ export default class ProjectRepository extends DynamoDbRepository {
                     creator: data.Item.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
                     name: data.Item.name.S,
                     ...(data.Item.created && { created: parseInt(data.Item.created.N) }),
-                    ...(data.Item.deleted && { deleted: parseInt(data.Item.deleted.N) }),
+                    ...(data.Item.archived && { archived: parseInt(data.Item.archived.N) }),
                     ...(data.Item.offChainImageUrl && data.Item.offChainImageUrl.S && { offChainImageUrl: data.Item.offChainImageUrl.S })
                 }
             }
@@ -128,8 +128,8 @@ export default class ProjectRepository extends DynamoDbRepository {
                 await this.update({
                     key: { pk: { S: `${this.projectPrefix}|${contractId}` } },
                     attributes: {
-                        '#data': { S: `${this.itemName}|deleted|${now}` },
-                        deleted: { N: now.toString() }
+                        '#data': { S: `${this.itemName}|archived|${now}` },
+                        archived: { N: now.toString() }
                     },
                     itemLogName: this.itemName
                 })
