@@ -78,7 +78,7 @@ export default class ProjectRepository extends DynamoDbRepository {
             ...(status && { attributeNames: { '#data': 'data' } }),
             attributeValues: {
                 ':gsi2pk': { S: `type|${this.itemName}` },
-                ...(status && { ':status': { S: `${this.itemName}|${status}|` } })
+                ...(status && { ':status': { S: `${this.itemName}|${status}` } })
             },
             pageSize,
             nextPageKey,
