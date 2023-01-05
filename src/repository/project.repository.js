@@ -36,6 +36,7 @@ export default class ProjectRepository extends DynamoDbRepository {
                     id: contractId,
                     creator: data.Item.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
                     name: data.Item.name.S,
+                    status: data.Item.data.S.split('|')[1],
                     ...(data.Item.created && { created: parseInt(data.Item.created.N) }),
                     ...(data.Item.archived && { archived: parseInt(data.Item.archived.N) }),
                     ...(data.Item.offChainImageUrl && data.Item.offChainImageUrl.S && { offChainImageUrl: data.Item.offChainImageUrl.S })
@@ -65,13 +66,19 @@ export default class ProjectRepository extends DynamoDbRepository {
         }
     }
 
-    async getProjects({ pageSize, nextPageKey, sort }) {
+    async getProjects({ pageSize, nextPageKey, sort, status }) {
         const forward = sort && sort === 'desc' ? false : true
+        let condition = 'gsi2pk = :gsi2pk'
+        if (status) {
+            condition = `${condition} AND begins_with(#data, :status)`
+        }
         const data = await this.query({
             indexName: 'gsi2',
-            conditionExpression: 'gsi2pk = :gsi2pk',
+            conditionExpression: condition,
+            ...(status && { attributeNames: { '#data': 'data' } }),
             attributeValues: {
-                ':gsi2pk': { S: `type|${this.itemName}` }
+                ':gsi2pk': { S: `type|${this.itemName}` },
+                ...(status && { ':status': { S: `${this.itemName}|${status}|` } })
             },
             pageSize,
             nextPageKey,
@@ -81,9 +88,11 @@ export default class ProjectRepository extends DynamoDbRepository {
         return {
             projects: data.items.map(project => ({
                 id: project.pk.S.replace('project|', ''),
-                created: project.data.S.split('|')[2],
+                status: project.data.S.split('|')[1],
                 creator: project.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
                 ...(project.name && { name: project.name.S }),
+                ...(project.created && { created: parseInt(project.created.N) }),
+                ...(project.archived && { archived: parseInt(project.archived.N) }),
                 ...(project.offChainImageUrl && { offChainImageUrl: project.offChainImageUrl.S })
             })),
             ...(data.nextPageKey && { nextPageKey: data.nextPageKey })

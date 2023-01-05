@@ -1326,11 +1326,12 @@ describe('app', function () {
                 ]
             }))
 
-            const response = await request(app.callback()).get('/projects?sort=asc&pageSize=12&nextPageKey=page-key')
+            const response = await request(app.callback()).get('/projects?sort=asc&status=approved&pageSize=12&nextPageKey=page-key')
 
             expect(mockProjectRepository.getProjects).toHaveBeenCalledTimes(1)
             expect(mockProjectRepository.getProjects).toHaveBeenCalledWith({
                 sort: 'asc',
+                status: 'approved',
                 nextPageKey: 'page-key',
                 pageSize: '12'
             })
