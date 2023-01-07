@@ -1367,12 +1367,13 @@ describe('app', function () {
                 ]
             }))
 
-            const response = await request(app.callback()).get('/creators/creator-id/projects?sort=asc&pageSize=12&nextPageKey=page-key')
+            const response = await request(app.callback()).get('/creators/creator-id/projects?sort=asc&status=approved&pageSize=12&nextPageKey=page-key')
 
             expect(mockProjectRepository.getProjectsByCreator).toHaveBeenCalledTimes(1)
             expect(mockProjectRepository.getProjectsByCreator).toHaveBeenCalledWith({
                 creator: 'creator-id',
                 sort: 'asc',
+                status: 'approved',
                 nextPageKey: 'page-key',
                 pageSize: '12'
             })

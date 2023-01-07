@@ -99,15 +99,19 @@ export default class ProjectRepository extends DynamoDbRepository {
         }
     }
 
-    async getProjectsByCreator({ creator, pageSize, nextPageKey, sort }) {
+    async getProjectsByCreator({ creator, pageSize, nextPageKey, sort, status }) {
         const forward = sort && sort === 'desc' ? false : true
+        let projectAttributeValue = `${this.itemName}|`
+        if (status) {
+            projectAttributeValue = `${projectAttributeValue}${status}`
+        }
         const data = await this.query({
             indexName: 'gsi1',
-            conditionExpression: 'gsi1pk = :gsi1pk AND begins_with(#data, :type)',
+            conditionExpression: 'gsi1pk = :gsi1pk AND begins_with(#data, :project)',
             attributeNames: { '#data': 'data' },
             attributeValues: {
                 ':gsi1pk': { S: `user|${creator}` },
-                ':type': { S: 'project|' }
+                ':project': { S: projectAttributeValue }
             },
             pageSize,
             nextPageKey,
@@ -117,8 +121,10 @@ export default class ProjectRepository extends DynamoDbRepository {
         return {
             projects: data.items.map(project => ({
                 id: project.pk.S.replace('project|', ''),
-                created: project.data.S.split('|')[2],
+                status: project.data.S.split('|')[1],
                 ...(project.name && { name: project.name.S }),
+                ...(project.created && { created: parseInt(project.created.N) }),
+                ...(project.archived && { archived: parseInt(project.archived.N) }),
                 ...(project.offChainImageUrl && { offChainImageUrl: project.offChainImageUrl.S })
             })),
             ...(data.nextPageKey && { nextPageKey: data.nextPageKey })

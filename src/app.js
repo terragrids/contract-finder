@@ -303,6 +303,7 @@ router.get('/creators/:creatorId/projects', async ctx => {
     const projects = await new ProjectRepository().getProjectsByCreator({
         creator: ctx.params.creatorId,
         sort: ctx.request.query.sort,
+        status: ctx.request.query.status,
         pageSize: ctx.request.query.pageSize,
         nextPageKey: ctx.request.query.nextPageKey
     })
