@@ -165,7 +165,7 @@ router.post('/projects', authHandler, bodyParser(), async ctx => {
                             name: ctx.request.body.name,
                             offChainImageUrl: ctx.request.body.offChainImageUrl,
                             creator: ctx.request.body.creator,
-                            tokenId: tokenId
+                            tokenId
                         })
                         succeed(contractId)
                     } catch (e) {

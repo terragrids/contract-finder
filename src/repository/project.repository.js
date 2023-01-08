@@ -7,7 +7,7 @@ export default class ProjectRepository extends DynamoDbRepository {
     userPrefix = 'user'
     itemName = 'project'
 
-    async createProject({ contractId, name, offChainImageUrl, creator }) {
+    async createProject({ contractId, name, offChainImageUrl, creator, tokenId }) {
         const now = Date.now()
 
         return await this.put({
@@ -16,8 +16,9 @@ export default class ProjectRepository extends DynamoDbRepository {
                 gsi1pk: { S: `${this.userPrefix}|${creator}` },
                 gsi2pk: { S: `type|${this.itemName}` },
                 data: { S: `${this.itemName}|created|${now}` },
-                created: { S: now },
-                name: { N: name.toString() },
+                created: { N: now.toString() },
+                name: { S: name },
+                tokenId: { N: tokenId.toString() },
                 offChainImageUrl: { S: offChainImageUrl }
             },
             itemLogName: this.itemName
