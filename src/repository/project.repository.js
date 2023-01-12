@@ -67,6 +67,24 @@ export default class ProjectRepository extends DynamoDbRepository {
         }
     }
 
+    async setProjectApproval(contractId, approved) {
+        try {
+            const state = approved ? 'approved' : 'rejected'
+            const now = Date.now()
+            await this.update({
+                key: { pk: { S: `${this.projectPrefix}|${contractId}` } },
+                attributes: {
+                    '#data': { S: `${this.itemName}|${state}|${now}` },
+                    approvalDate: { N: now.toString() }
+                },
+                itemLogName: this.itemName
+            })
+        } catch (e) {
+            if (e instanceof ConditionalCheckFailedException) throw new ProjectNotFoundError()
+            else throw e
+        }
+    }
+
     async getProjects({ pageSize, nextPageKey, sort, status }) {
         const forward = sort && sort === 'desc' ? false : true
         let condition = 'gsi2pk = :gsi2pk'

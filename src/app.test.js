@@ -11,7 +11,8 @@ const mockStdlib = {
     launchToken: jest.fn().mockImplementation(() => jest.fn()),
     algosdk: jest.fn().mockImplementation(() => jest.fn()),
     makeAssetConfigTxnWithSuggestedParamsFromObject: jest.fn().mockImplementation(() => jest.fn()),
-    waitForConfirmation: jest.fn().mockImplementation(() => jest.fn())
+    waitForConfirmation: jest.fn().mockImplementation(() => jest.fn()),
+    tokensAccepted: jest.fn().mockImplementation(() => jest.fn())
 }
 
 jest.mock('./provider/reach-provider.js', () =>
@@ -24,6 +25,7 @@ jest.mock('./provider/reach-provider.js', () =>
             protect: mockStdlib.protect,
             formatAddress: mockStdlib.formatAddress,
             launchToken: mockStdlib.launchToken,
+            tokensAccepted: mockStdlib.tokensAccepted,
             algosdk: {
                 makeAssetConfigTxnWithSuggestedParamsFromObject: mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject,
                 waitForConfirmation: mockStdlib.waitForConfirmation
@@ -48,7 +50,8 @@ const mockProjectRepository = {
     getProject: jest.fn().mockImplementation(() => jest.fn()),
     getProjects: jest.fn().mockImplementation(() => jest.fn()),
     getProjectsByCreator: jest.fn().mockImplementation(() => jest.fn()),
-    deleteProject: jest.fn().mockImplementation(() => jest.fn())
+    deleteProject: jest.fn().mockImplementation(() => jest.fn()),
+    setProjectApproval: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/project.repository.js', () =>
     jest.fn().mockImplementation(() => ({
@@ -57,7 +60,8 @@ jest.mock('./repository/project.repository.js', () =>
         getProject: mockProjectRepository.getProject,
         getProjects: mockProjectRepository.getProjects,
         getProjectsByCreator: mockProjectRepository.getProjectsByCreator,
-        deleteProject: mockProjectRepository.deleteProject
+        deleteProject: mockProjectRepository.deleteProject,
+        setProjectApproval: mockProjectRepository.setProjectApproval
     }))
 )
 
@@ -747,6 +751,8 @@ describe('app', function () {
 
     describe('update project endpoint', function () {
         it('should return 204 when updating all project properties and all is fine', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
             mockProjectRepository.getProject.mockImplementation(() => ({
                 id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
                 creator: 'project creator'
@@ -783,14 +789,14 @@ describe('app', function () {
                 signTxn: mockSignedTnx
             }))
 
-            const response = await request(app.callback()).put('/projects/contract-id').send({
+            const response = await request(app.callback()).put(`/projects/${contractId}`).send({
                 name: 'project name',
                 cid: 'project cid',
                 offChainImageUrl: 'off-chain url'
             })
 
             expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
-            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith(contractId)
 
             expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledTimes(1)
             expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledWith({
@@ -813,7 +819,7 @@ describe('app', function () {
 
             expect(mockProjectRepository.updateProject).toHaveBeenCalledTimes(1)
             expect(mockProjectRepository.updateProject).toHaveBeenCalledWith({
-                contractId: 'contract-id',
+                contractId,
                 cid: 'project cid',
                 name: 'project name',
                 offChainImageUrl: 'off-chain url'
@@ -824,6 +830,8 @@ describe('app', function () {
         })
 
         it('should return 204 when updating all project properties and user is admin', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
             process.env.ADMIN_WALLETS = 'admin_wallet,super_wallet'
             authHandler.mockImplementation(async (ctx, next) => {
                 ctx.state.account = 'admin_wallet'
@@ -831,7 +839,7 @@ describe('app', function () {
             })
 
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                id: contractId,
                 creator: 'project creator'
             }))
 
@@ -866,14 +874,14 @@ describe('app', function () {
                 signTxn: mockSignedTnx
             }))
 
-            const response = await request(app.callback()).put('/projects/contract-id').send({
+            const response = await request(app.callback()).put(`/projects/${contractId}`).send({
                 name: 'project name',
                 cid: 'project cid',
                 offChainImageUrl: 'off-chain url'
             })
 
             expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
-            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith(contractId)
 
             expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledTimes(1)
             expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledWith({
@@ -896,7 +904,7 @@ describe('app', function () {
 
             expect(mockProjectRepository.updateProject).toHaveBeenCalledTimes(1)
             expect(mockProjectRepository.updateProject).toHaveBeenCalledWith({
-                contractId: 'contract-id',
+                contractId,
                 cid: 'project cid',
                 name: 'project name',
                 offChainImageUrl: 'off-chain url'
@@ -907,24 +915,26 @@ describe('app', function () {
         })
 
         it('should return 403 when updating project with unauthorized user', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
             authHandler.mockImplementation(async (ctx, next) => {
                 ctx.state.account = 'bogus user'
                 await next()
             })
 
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                id: contractId,
                 creator: 'project creator'
             }))
 
-            const response = await request(app.callback()).put('/projects/contract-id').send({
+            const response = await request(app.callback()).put(`/projects/${contractId}`).send({
                 name: 'project name',
                 cid: 'project cid',
                 offChainImageUrl: 'off-chain url'
             })
 
             expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
-            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith(contractId)
 
             expect(mockProjectRepository.updateProject).not.toHaveBeenCalled()
 
@@ -1037,8 +1047,10 @@ describe('app', function () {
         })
 
         it('should return 500 when cid verification fails', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                id: contractId,
                 creator: 'project creator'
             }))
 
@@ -1058,7 +1070,7 @@ describe('app', function () {
             algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
             cidFromAlgorandAddress.mockImplementation(() => 'project meh')
 
-            const response = await request(app.callback()).put('/projects/contract-id').send({
+            const response = await request(app.callback()).put(`/projects/${contractId}`).send({
                 name: 'project name',
                 cid: 'project cid',
                 offChainImageUrl: 'off-chain url'
@@ -1072,8 +1084,10 @@ describe('app', function () {
         })
 
         it('should return 500 when asset config transaction fails', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                id: contractId,
                 creator: 'project creator'
             }))
 
@@ -1108,11 +1122,273 @@ describe('app', function () {
                 throw new Error()
             })
 
-            const response = await request(app.callback()).put('/projects/contract-id').send({
+            const response = await request(app.callback()).put(`/projects/${contractId}`).send({
                 name: 'project name',
                 cid: 'project cid',
                 offChainImageUrl: 'off-chain url'
             })
+
+            expect(response.status).toBe(500)
+            expect(response.body).toEqual({
+                error: 'UpdateContractError',
+                message: 'Unable to update project contract'
+            })
+        })
+    })
+
+    describe('approve project endpoint', function () {
+        beforeEach(() => {
+            mockStdlib.formatAddress.mockImplementation(address => `formatted ${address}`)
+
+            process.env.ADMIN_WALLETS = 'admin_wallet,super_wallet'
+            authHandler.mockImplementation(async (ctx, next) => {
+                ctx.state.account = 'admin_wallet'
+                await next()
+            })
+        })
+
+        it('should return 204 when approving project and creator accepts token', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
+            const api = {
+                Api: {
+                    payToken: jest.fn().mockImplementation(() => Promise.resolve()),
+                    setApprovalState: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            const view = {
+                View: {
+                    creator: () => [0, 'project_creator'],
+                    token: () => [0, { toNumber: () => 'project_token_id' }]
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
+                contract: () => ({
+                    a: api,
+                    v: view
+                })
+            }))
+
+            mockStdlib.tokensAccepted.mockImplementation(() => [
+                {
+                    toNumber: () => 'project_token_id'
+                }
+            ])
+
+            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({
+                approved: true
+            })
+
+            expect(mockStdlib.tokensAccepted).toHaveBeenCalledTimes(1)
+            expect(mockStdlib.tokensAccepted).toHaveBeenCalledWith('formatted project_creator')
+
+            expect(api.Api.payToken).toHaveBeenCalledTimes(1)
+
+            expect(mockProjectRepository.setProjectApproval).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.setProjectApproval).toHaveBeenCalledWith(contractId, true)
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
+        it('should return 204 when approving project and creator do not accept token', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
+            const api = {
+                Api: {
+                    payToken: jest.fn().mockImplementation(() => Promise.resolve()),
+                    setApprovalState: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            const view = {
+                View: {
+                    creator: () => [0, 'project_creator'],
+                    token: () => [0, { toNumber: () => 'project_token_id' }]
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
+                contract: () => ({
+                    a: api,
+                    v: view
+                })
+            }))
+
+            mockStdlib.tokensAccepted.mockImplementation(() => [
+                {
+                    toNumber: () => 'other_project_token_id'
+                }
+            ])
+
+            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({
+                approved: true
+            })
+
+            expect(mockStdlib.tokensAccepted).toHaveBeenCalledTimes(1)
+            expect(mockStdlib.tokensAccepted).toHaveBeenCalledWith('formatted project_creator')
+
+            expect(api.Api.payToken).not.toHaveBeenCalled()
+            expect(api.Api.setApprovalState).toHaveBeenCalledTimes(1)
+            expect(api.Api.setApprovalState).toHaveBeenCalledWith(true)
+
+            expect(mockProjectRepository.setProjectApproval).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.setProjectApproval).toHaveBeenCalledWith(contractId, true)
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
+        it('should return 204 when rejecting project', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
+            const api = {
+                Api: {
+                    setApprovalState: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({
+                approved: false
+            })
+
+            expect(api.Api.setApprovalState).toHaveBeenCalledTimes(1)
+            expect(api.Api.setApprovalState).toHaveBeenCalledWith(false)
+
+            expect(mockProjectRepository.setProjectApproval).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.setProjectApproval).toHaveBeenCalledWith(contractId, false)
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
+        it('should return 400 when approval state not sent', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
+            const api = {
+                Api: {
+                    setApprovalState: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({})
+
+            expect(api.Api.setApprovalState).not.toHaveBeenCalled()
+            expect(mockProjectRepository.setProjectApproval).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'approved must be specified'
+            })
+        })
+
+        it('should return 403 when user is not admin', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            authHandler.mockImplementation(async (ctx, next) => {
+                ctx.state.account = 'small_wallet'
+                await next()
+            })
+
+            const api = {
+                Api: {
+                    setApprovalState: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({
+                approved: true
+            })
+
+            expect(api.Api.setApprovalState).not.toHaveBeenCalled()
+            expect(mockProjectRepository.setProjectApproval).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(403)
+            expect(response.body).toEqual({
+                error: 'UserUnauthorizedError',
+                message: 'The authenticated user is not authorized to perform this action'
+            })
+        })
+
+        it('should return 400 when contract id is malformed', async () => {
+            const contractId = 'contract_id'
+
+            const api = {
+                Api: {
+                    setApprovalState: jest.fn().mockImplementation(() => Promise.resolve())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({
+                approved: true
+            })
+
+            expect(api.Api.setApprovalState).not.toHaveBeenCalled()
+            expect(mockProjectRepository.setProjectApproval).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ContractIdMalformedError',
+                message: 'The specified contract identifier is malformed'
+            })
+        })
+
+        it('should return 500 when api fails', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
+            const api = {
+                Api: {
+                    setApprovalState: jest.fn().mockImplementation(() => Promise.reject())
+                }
+            }
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
+                contract: () => ({
+                    a: api
+                })
+            }))
+
+            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({
+                approved: false
+            })
+
+            expect(api.Api.setApprovalState).toHaveBeenCalledTimes(1)
+            expect(api.Api.setApprovalState).toHaveBeenCalledWith(false)
+
+            expect(mockProjectRepository.setProjectApproval).not.toHaveBeenCalled()
 
             expect(response.status).toBe(500)
             expect(response.body).toEqual({
@@ -1128,8 +1404,10 @@ describe('app', function () {
         })
 
         it('should return 200 when getting project and all is fine', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                id: contractId,
                 created: 'creation-date',
                 creator: 'creator'
             }))
@@ -1170,14 +1448,14 @@ describe('app', function () {
                 })
             })
 
-            const response = await request(app.callback()).get('/projects/contract-id')
+            const response = await request(app.callback()).get(`/projects/${contractId}`)
 
             expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
-            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith(contractId)
 
             expect(response.status).toBe(200)
             expect(response.body).toEqual({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                id: contractId,
                 creator: 'formatted project creator',
                 created: 'creation-date',
                 name: 'project name',
@@ -1191,8 +1469,10 @@ describe('app', function () {
         })
 
         it('should return 500 when getting project and create account fails', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                id: contractId,
                 creator: 'creator'
             }))
 
@@ -1200,10 +1480,10 @@ describe('app', function () {
                 throw new Error()
             })
 
-            const response = await request(app.callback()).get('/projects/contract-id')
+            const response = await request(app.callback()).get(`/projects/${contractId}`)
 
             expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
-            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith(contractId)
 
             expect(response.status).toBe(500)
             expect(response.body).toEqual({
@@ -1213,8 +1493,10 @@ describe('app', function () {
         })
 
         it('should return 404 when getting project and token not found', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                id: contractId,
                 created: 'creation-date',
                 creator: 'creator'
             }))
@@ -1256,10 +1538,10 @@ describe('app', function () {
                 })
             })
 
-            const response = await request(app.callback()).get('/projects/contract-id')
+            const response = await request(app.callback()).get(`/projects/${contractId}`)
 
             expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
-            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith(contractId)
 
             expect(response.status).toBe(404)
             expect(response.body).toEqual({
@@ -1269,8 +1551,10 @@ describe('app', function () {
         })
 
         it('should return 404 when getting project and token deleted', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
             mockProjectRepository.getProject.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
+                id: contractId,
                 created: 'creation-date',
                 creator: 'creator'
             }))
@@ -1298,10 +1582,10 @@ describe('app', function () {
                 })
             })
 
-            const response = await request(app.callback()).get('/projects/contract-id')
+            const response = await request(app.callback()).get(`/projects/${contractId}`)
 
             expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
-            expect(mockProjectRepository.getProject).toHaveBeenCalledWith('contract-id')
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith(contractId)
 
             expect(response.status).toBe(404)
             expect(response.body).toEqual({

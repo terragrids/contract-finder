@@ -24,7 +24,6 @@ import MintTokenError from './error/mint-token.error.js'
 import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-utils.js'
 import AlgoIndexer from './network/algo-indexer.js'
 import AssetNotFoundError from './error/asset-not-found.error.js'
-import ContractIdMalformedError from './error/contract-id-malformed.error.js'
 import { isAdminWallet } from './utils/wallet-utils.js'
 
 dotenv.config()
@@ -196,19 +195,21 @@ router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
     if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
     if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
 
+    const infoObject = getContractFromJsonString(ctx.params.contractId)
+
     const repository = new ProjectRepository()
     const project = await repository.getProject(ctx.params.contractId)
 
+    // Admins or creators can update project details
     if (ctx.state.account !== project.creator && !isAdminWallet(ctx.state.account)) throw new UserUnauthorizedError()
 
     try {
         const stdlib = new ReachProvider().getStdlib()
         const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
 
-        const infoObject = getContractFromJsonString(project.id)
         const contract = algoAccount.contract(backend, infoObject)
-        const view = contract.v.View
 
+        const view = contract.v.View
         const tokenId = (await view.token())[1].toNumber()
 
         const cid = ctx.request.body.cid
@@ -250,6 +251,44 @@ router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
     }
 })
 
+router.put('/projects/:contractId/approval', authHandler, bodyParser(), async ctx => {
+    if (ctx.request.body.approved === undefined) throw new MissingParameterError('approved')
+    if (!isAdminWallet(ctx.state.account)) throw new UserUnauthorizedError()
+
+    const approved = ctx.request.body.approved === true ? true : false
+    const infoObject = getContractFromJsonString(ctx.params.contractId)
+
+    try {
+        const stdlib = new ReachProvider().getStdlib()
+        const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
+
+        const contract = algoAccount.contract(backend, infoObject)
+
+        const api = contract.a.Api
+
+        if (approved) {
+            const view = contract.v.View
+            const creator = stdlib.formatAddress((await view.creator())[1])
+            const tokenId = (await view.token())[1].toNumber()
+
+            const tokens = await stdlib.tokensAccepted(creator)
+            const tokenAccepted = tokens.map(token => token.toNumber()).some(id => id === tokenId)
+
+            // Approve and pay the token if the creator opted in, otherwise just approve
+            if (tokenAccepted) await api.payToken()
+            else await api.setApprovalState(true)
+        } else {
+            await api.setApprovalState(false)
+        }
+
+        await new ProjectRepository().setProjectApproval(ctx.params.contractId, approved)
+
+        ctx.status = 204
+    } catch (e) {
+        throw new UpdateContractError(e)
+    }
+})
+
 router.get('/projects', async ctx => {
     const projects = await new ProjectRepository().getProjects({
         sort: ctx.request.query.sort,
@@ -262,6 +301,7 @@ router.get('/projects', async ctx => {
 })
 
 router.get('/projects/:contractId', async ctx => {
+    const infoObject = getContractFromJsonString(ctx.params.contractId)
     const project = await new ProjectRepository().getProject(ctx.params.contractId)
 
     let balance, tokenBalance, tokenId, creator, approved
@@ -269,7 +309,6 @@ router.get('/projects/:contractId', async ctx => {
         const stdlib = new ReachProvider().getStdlib()
         const algoAccount = await stdlib.createAccount()
 
-        const infoObject = getContractFromJsonString(project.id)
         const contract = algoAccount.contract(backend, infoObject)
         const view = contract.v.View
 
@@ -314,13 +353,7 @@ router.get('/creators/:creatorId/projects', async ctx => {
 router.delete('/projects/:contractId', authHandler, async ctx => {
     if (!isAdminWallet(ctx.state.account)) throw new UserUnauthorizedError()
 
-    let infoObject
-    try {
-        infoObject = getContractFromJsonString(ctx.params.contractId)
-    } catch (e) {
-        throw new ContractIdMalformedError()
-    }
-
+    const infoObject = getContractFromJsonString(ctx.params.contractId)
     await new ProjectRepository().deleteProject(ctx.params.contractId, ctx.request.query.permanent === 'true')
 
     const stdlib = new ReachProvider().getStdlib()
