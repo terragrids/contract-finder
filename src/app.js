@@ -66,37 +66,6 @@ router.get('/hc', async ctx => {
     }
 })
 
-router.post('/projects/token', authHandler, bodyParser(), async ctx => {
-    if (!ctx.request.body.name) throw new MissingParameterError('name')
-    if (!ctx.request.body.cid) throw new MissingParameterError('cid')
-
-    if (ctx.request.body.name.length > 32) throw new ParameterTooLongError('name')
-
-    const stdlib = new ReachProvider().getStdlib()
-
-    try {
-        const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
-
-        const cid = ctx.request.body.cid
-        const { address, url } = algorandAddressFromCID(stdlib.algosdk, cid)
-        const cidFromAddress = cidFromAlgorandAddress(stdlib.algosdk, address)
-        if (cid !== cidFromAddress) throw new Error('Error verifying cid')
-
-        const token = await stdlib.launchToken(algoAccount, ctx.request.body.name, 'TRPRJ', {
-            supply: 1,
-            decimals: 0,
-            url,
-            reserve: address,
-            manager: algoAccount.networkAccount.addr
-        })
-
-        ctx.body = { id: token.id.toNumber() }
-        ctx.status = 201
-    } catch (e) {
-        throw new MintTokenError(e)
-    }
-})
-
 router.post('/projects', authHandler, bodyParser(), async ctx => {
     if (!ctx.request.body.name) throw new MissingParameterError('name')
     if (!ctx.request.body.creator) throw new MissingParameterError('creator')
