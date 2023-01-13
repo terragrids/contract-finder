@@ -1403,7 +1403,7 @@ describe('app', function () {
             mockStdlib.formatAddress.mockImplementation(address => `formatted ${address}`)
         })
 
-        it('should return 200 when getting project and all is fine', async () => {
+        it('should return 200 when getting project and creator has not opted in to the token', async () => {
             const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
 
             mockProjectRepository.getProject.mockImplementation(() => ({
@@ -1412,12 +1412,18 @@ describe('app', function () {
                 creator: 'creator'
             }))
 
+            mockStdlib.tokensAccepted.mockImplementation(() => [
+                {
+                    toNumber: () => 'other_project_token_id'
+                }
+            ])
+
             const view = {
                 View: {
                     balance: () => [0, { toNumber: () => 123 }],
                     tokenBalance: () => [0, { toNumber: () => 1 }],
-                    token: () => [0, { toNumber: () => 'project token id' }],
-                    creator: () => [0, 'project creator'],
+                    token: () => [0, { toNumber: () => 'project_token_id' }],
+                    creator: () => [0, 'project_creator'],
                     approved: () => [0, true]
                 }
             }
@@ -1456,12 +1462,85 @@ describe('app', function () {
             expect(response.status).toBe(200)
             expect(response.body).toEqual({
                 id: contractId,
-                creator: 'formatted project creator',
+                creator: 'formatted project_creator',
                 created: 'creation-date',
                 name: 'project name',
                 url: 'project url',
                 reserve: 'project reserve',
-                tokenId: 'project token id',
+                tokenId: 'project_token_id',
+                tokenCreatorOptIn: false,
+                balance: 123,
+                approved: true,
+                tokenPaid: false
+            })
+        })
+
+        it('should return 200 when getting project and creator has opted in to the token', async () => {
+            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+
+            mockProjectRepository.getProject.mockImplementation(() => ({
+                id: contractId,
+                created: 'creation-date',
+                creator: 'creator'
+            }))
+
+            mockStdlib.tokensAccepted.mockImplementation(() => [
+                {
+                    toNumber: () => 'project_token_id'
+                }
+            ])
+
+            const view = {
+                View: {
+                    balance: () => [0, { toNumber: () => 123 }],
+                    tokenBalance: () => [0, { toNumber: () => 1 }],
+                    token: () => [0, { toNumber: () => 'project_token_id' }],
+                    creator: () => [0, 'project_creator'],
+                    approved: () => [0, true]
+                }
+            }
+
+            mockStdlib.createAccount.mockImplementation(() => ({
+                networkAccount: {},
+                contract: () => ({
+                    v: view
+                })
+            }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
+                return Promise.resolve({
+                    status: 200,
+                    json: {
+                        asset: {
+                            index: 123,
+                            params: {
+                                name: 'project name',
+                                total: 1,
+                                decimals: 0,
+                                'unit-name': 'TRPRJ',
+                                url: 'project url',
+                                reserve: 'project reserve'
+                            }
+                        }
+                    }
+                })
+            })
+
+            const response = await request(app.callback()).get(`/projects/${contractId}`)
+
+            expect(mockProjectRepository.getProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.getProject).toHaveBeenCalledWith(contractId)
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                id: contractId,
+                creator: 'formatted project_creator',
+                created: 'creation-date',
+                name: 'project name',
+                url: 'project url',
+                reserve: 'project reserve',
+                tokenId: 'project_token_id',
+                tokenCreatorOptIn: true,
                 balance: 123,
                 approved: true,
                 tokenPaid: false

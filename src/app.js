@@ -24,7 +24,7 @@ import MintTokenError from './error/mint-token.error.js'
 import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-utils.js'
 import AlgoIndexer from './network/algo-indexer.js'
 import AssetNotFoundError from './error/asset-not-found.error.js'
-import { isAdminWallet } from './utils/wallet-utils.js'
+import { isAdminWallet, isTokenAccepted } from './utils/wallet-utils.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -270,9 +270,7 @@ router.put('/projects/:contractId/approval', authHandler, bodyParser(), async ct
             const view = contract.v.View
             const creator = stdlib.formatAddress((await view.creator())[1])
             const tokenId = (await view.token())[1].toNumber()
-
-            const tokens = await stdlib.tokensAccepted(creator)
-            const tokenAccepted = tokens.map(token => token.toNumber()).some(id => id === tokenId)
+            const tokenAccepted = await isTokenAccepted(stdlib, creator, tokenId)
 
             // Approve and pay the token if the creator opted in, otherwise just approve
             if (tokenAccepted) await api.payToken()
@@ -304,7 +302,7 @@ router.get('/projects/:contractId', async ctx => {
     const infoObject = getContractFromJsonString(ctx.params.contractId)
     const project = await new ProjectRepository().getProject(ctx.params.contractId)
 
-    let balance, tokenBalance, tokenId, creator, approved
+    let balance, tokenBalance, tokenId, creator, approved, tokenCreatorOptIn
     try {
         const stdlib = new ReachProvider().getStdlib()
         const algoAccount = await stdlib.createAccount()
@@ -318,6 +316,7 @@ router.get('/projects/:contractId', async ctx => {
         tokenId = (await view.token())[1].toNumber()
         creator = stdlib.formatAddress((await view.creator())[1])
         approved = (await view.approved())[1]
+        tokenCreatorOptIn = await isTokenAccepted(stdlib, creator, tokenId)
     } catch (e) {
         throw new ReadContractError(e)
     }
@@ -332,6 +331,7 @@ router.get('/projects/:contractId', async ctx => {
         approved,
         tokenId,
         creator,
+        tokenCreatorOptIn,
         name: indexerResponse.json.asset.params.name,
         url: indexerResponse.json.asset.params.url,
         reserve: indexerResponse.json.asset.params.reserve
