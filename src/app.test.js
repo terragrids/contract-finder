@@ -467,6 +467,70 @@ describe('app', function () {
             })
         })
 
+        it('should return 201 when posting new project with long name', async () => {
+            mockStdlib.launchToken.mockImplementation(() => ({
+                id: { toNumber: () => 1234 }
+            }))
+
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'project cid')
+
+            const adminInterface = {
+                Admin: ({ log, onReady }) => {
+                    log('ready')
+                    onReady('contract')
+                }
+            }
+            const adminSpy = jest.spyOn(adminInterface, 'Admin')
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address' },
+                contract: () => ({
+                    p: adminInterface
+                })
+            }))
+
+            const response = await request(app.callback()).post('/projects').send({
+                name: 'Louisville and Nashville Railroad Office Building',
+                cid: 'project cid',
+                creator: 'project creator',
+                offChainImageUrl: 'image url'
+            })
+
+            expect(mockStdlib.launchToken).toHaveBeenCalledTimes(1)
+            expect(mockStdlib.launchToken).toHaveBeenCalledWith(expect.any(Object), 'Louisville and Nashville Railro…', 'TRPRJ', {
+                decimals: 0,
+                manager: 'wallet_address',
+                clawback: 'wallet_address',
+                freeze: 'wallet_address',
+                reserve: 'reserve_address',
+                supply: 1,
+                url: 'token_url'
+            })
+
+            expect(adminSpy).toHaveBeenCalledTimes(1)
+            expect(adminSpy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    creator: 'project creator',
+                    token: 1234
+                })
+            )
+
+            expect(mockProjectRepository.createProject).toHaveBeenCalledTimes(1)
+            expect(mockProjectRepository.createProject).toHaveBeenCalledWith({
+                contractId: 'ImNvbnRyYWN0Ig==',
+                creator: 'project creator',
+                name: 'Louisville and Nashville Railroad Office Building',
+                offChainImageUrl: 'image url',
+                tokenId: 1234
+            })
+
+            expect(response.status).toBe(201)
+            expect(response.body).toEqual({
+                contractInfo: 'ImNvbnRyYWN0Ig==',
+                tokenId: 1234
+            })
+        })
+
         it('should return 500 when launch token fails', async () => {
             mockStdlib.launchToken.mockImplementation(() => {
                 throw new Error()

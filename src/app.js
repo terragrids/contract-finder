@@ -9,7 +9,7 @@ import requestLogger from './middleware/request-logger.js'
 import DeployContractError from './error/deploy-contract.error.js'
 import ReachProvider from './provider/reach-provider.js'
 import * as backend from '../reach/project-contract/build/index.main.mjs'
-import { getContractFromJsonString, getJsonStringFromContract } from './utils/string-utils.js'
+import { getContractFromJsonString, getJsonStringFromContract, truncateString } from './utils/string-utils.js'
 import { createPromise } from './utils/promise.js'
 import MissingParameterError from './error/missing-parameter.error.js'
 import ParameterTooLongError from './error/parameter-too-long.error.js'
@@ -70,7 +70,7 @@ router.post('/projects/token', authHandler, bodyParser(), async ctx => {
     if (!ctx.request.body.name) throw new MissingParameterError('name')
     if (!ctx.request.body.cid) throw new MissingParameterError('cid')
 
-    if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
+    if (ctx.request.body.name.length > 32) throw new ParameterTooLongError('name')
 
     const stdlib = new ReachProvider().getStdlib()
 
@@ -129,8 +129,9 @@ router.post('/projects', authHandler, bodyParser(), async ctx => {
         if (cid !== cidFromAddress) throw new Error('Error verifying cid')
 
         const managerAddress = algoAccount.networkAccount.addr
+        const assetName = truncateString(ctx.request.body.name, 32)
 
-        const token = await stdlib.launchToken(algoAccount, ctx.request.body.name, 'TRPRJ', {
+        const token = await stdlib.launchToken(algoAccount, assetName, 'TRPRJ', {
             supply: 1,
             decimals: 0,
             url,
