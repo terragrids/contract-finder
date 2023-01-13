@@ -391,7 +391,7 @@ describe('app', function () {
             })
 
             expect(mockStdlib.launchToken).toHaveBeenCalledTimes(1)
-            expect(mockStdlib.launchToken).toHaveBeenCalledWith(expect.any(Object), 'Louisville and Nashville Railro…', 'TRPRJ', {
+            expect(mockStdlib.launchToken).toHaveBeenCalledWith(expect.any(Object), 'Louisville and Nashville Rail…', 'TRPRJ', {
                 decimals: 0,
                 manager: 'wallet_address',
                 clawback: 'wallet_address',

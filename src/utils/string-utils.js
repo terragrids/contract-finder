@@ -14,7 +14,7 @@ export function getContractFromJsonString(contractInfo) {
 
 export function truncateString(s, maxLength) {
     if (s.length > maxLength) {
-        s = s.substring(0, maxLength - 1) + '…'
+        s = s.substring(0, maxLength - 3) + '…'
     }
     return s
 }
