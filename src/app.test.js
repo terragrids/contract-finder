@@ -70,6 +70,13 @@ jest.mock('../reach/project-contract/build/index.main.mjs', () => jest.fn().mock
 import authHandler from './middleware/auth-handler.js'
 jest.mock('./middleware/auth-handler.js')
 
+jest.mock('./middleware/jwt-authorize.js', () =>
+    jest.fn().mockImplementation(async (ctx, next) => {
+        ctx.state.jwt = { sub: 'jwt_sub' }
+        await next()
+    })
+)
+
 import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-utils.js'
 
 jest.mock('./utils/token-utils.js', () => ({
@@ -305,24 +312,13 @@ describe('app', function () {
             algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
             cidFromAlgorandAddress.mockImplementation(() => 'project cid')
 
-            const adminInterface = {
-                Admin: ({ log, onReady }) => {
-                    log('ready')
-                    onReady('contract')
-                }
-            }
-            const adminSpy = jest.spyOn(adminInterface, 'Admin')
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address' },
-                contract: () => ({
-                    p: adminInterface
-                })
+                networkAccount: { addr: 'wallet_address' }
             }))
 
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
                 cid: 'project cid',
-                creator: 'project creator',
                 offChainImageUrl: 'image url'
             })
 
@@ -337,18 +333,9 @@ describe('app', function () {
                 url: 'token_url'
             })
 
-            expect(adminSpy).toHaveBeenCalledTimes(1)
-            expect(adminSpy).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    creator: 'project creator',
-                    token: 1234
-                })
-            )
-
             expect(mockProjectRepository.createProject).toHaveBeenCalledTimes(1)
             expect(mockProjectRepository.createProject).toHaveBeenCalledWith({
-                contractId: 'ImNvbnRyYWN0Ig==',
-                creator: 'project creator',
+                userId: 'jwt_sub',
                 name: 'project name',
                 offChainImageUrl: 'image url',
                 tokenId: 1234
@@ -356,7 +343,6 @@ describe('app', function () {
 
             expect(response.status).toBe(201)
             expect(response.body).toEqual({
-                contractInfo: 'ImNvbnRyYWN0Ig==',
                 tokenId: 1234
             })
         })
@@ -369,18 +355,8 @@ describe('app', function () {
             algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
             cidFromAlgorandAddress.mockImplementation(() => 'project cid')
 
-            const adminInterface = {
-                Admin: ({ log, onReady }) => {
-                    log('ready')
-                    onReady('contract')
-                }
-            }
-            const adminSpy = jest.spyOn(adminInterface, 'Admin')
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address' },
-                contract: () => ({
-                    p: adminInterface
-                })
+                networkAccount: { addr: 'wallet_address' }
             }))
 
             const response = await request(app.callback()).post('/projects').send({
@@ -401,18 +377,9 @@ describe('app', function () {
                 url: 'token_url'
             })
 
-            expect(adminSpy).toHaveBeenCalledTimes(1)
-            expect(adminSpy).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    creator: 'project creator',
-                    token: 1234
-                })
-            )
-
             expect(mockProjectRepository.createProject).toHaveBeenCalledTimes(1)
             expect(mockProjectRepository.createProject).toHaveBeenCalledWith({
-                contractId: 'ImNvbnRyYWN0Ig==',
-                creator: 'project creator',
+                userId: 'jwt_sub',
                 name: 'Louisville and Nashville Railroad Office Building',
                 offChainImageUrl: 'image url',
                 tokenId: 1234
@@ -420,7 +387,6 @@ describe('app', function () {
 
             expect(response.status).toBe(201)
             expect(response.body).toEqual({
-                contractInfo: 'ImNvbnRyYWN0Ig==',
                 tokenId: 1234
             })
         })
@@ -433,7 +399,6 @@ describe('app', function () {
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
                 cid: 'project cid',
-                creator: 'project creator',
                 offChainImageUrl: 'image url'
             })
 
@@ -451,7 +416,6 @@ describe('app', function () {
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
                 cid: 'project cid',
-                creator: 'project creator',
                 offChainImageUrl: 'image url'
             })
 
@@ -459,66 +423,6 @@ describe('app', function () {
             expect(response.body).toEqual({
                 error: 'MintTokenError',
                 message: 'Unable to mint token'
-            })
-        })
-
-        it('should return 500 when deploying contract fails', async () => {
-            mockStdlib.launchToken.mockImplementation(() => ({
-                id: { toNumber: () => 1234 }
-            }))
-
-            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
-            cidFromAlgorandAddress.mockImplementation(() => 'project cid')
-
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address' },
-                contract: () => {
-                    throw new Error()
-                }
-            }))
-
-            const response = await request(app.callback()).post('/projects').send({
-                name: 'project name',
-                cid: 'project cid',
-                creator: 'project creator',
-                offChainImageUrl: 'image url'
-            })
-
-            expect(response.status).toBe(500)
-            expect(response.body).toEqual({
-                error: 'DeployContractError',
-                message: 'Unable to deploy project contract'
-            })
-        })
-
-        it('should return 500 when retrieving contract info fails', async () => {
-            mockStdlib.launchToken.mockImplementation(() => ({
-                id: { toNumber: () => 1234 }
-            }))
-
-            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
-            cidFromAlgorandAddress.mockImplementation(() => 'project cid')
-
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address' },
-                contract: () => ({
-                    p: {
-                        Admin: ({ onReady }) => onReady(/* undefined contract */)
-                    }
-                })
-            }))
-
-            const response = await request(app.callback()).post('/projects').send({
-                name: 'project name',
-                cid: 'project cid',
-                creator: 'project creator',
-                offChainImageUrl: 'image url'
-            })
-
-            expect(response.status).toBe(500)
-            expect(response.body).toEqual({
-                error: 'DeployContractError',
-                message: 'Unable to deploy project contract'
             })
         })
 
@@ -535,35 +439,22 @@ describe('app', function () {
             cidFromAlgorandAddress.mockImplementation(() => 'project cid')
 
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address' },
-                contract: () => ({
-                    p: {
-                        Admin: ({ log, onReady }) => {
-                            log('ready')
-                            onReady('contract')
-                        }
-                    }
-                })
+                networkAccount: { addr: 'wallet_address' }
             }))
 
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
                 cid: 'project cid',
-                creator: 'project creator',
                 offChainImageUrl: 'image url'
             })
 
             expect(response.status).toBe(500)
-            expect(response.body).toEqual({
-                error: 'DeployContractError',
-                message: 'Unable to deploy project contract'
-            })
+            expect(response.body).toEqual({})
         })
 
         it('should return 400 when project name is missing', async () => {
             const response = await request(app.callback()).post('/projects').send({
                 cid: 'project cid',
-                creator: 'project creator',
                 offChainImageUrl: 'image url'
             })
 
@@ -577,7 +468,6 @@ describe('app', function () {
         it('should return 400 when project cid is missing', async () => {
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
-                creator: 'project creator',
                 offChainImageUrl: 'image url'
             })
 
@@ -591,8 +481,7 @@ describe('app', function () {
         it('should return 400 when project offChainImageUrl is missing', async () => {
             const response = await request(app.callback()).post('/projects').send({
                 name: 'project name',
-                cid: 'project cid',
-                creator: 'project creator'
+                cid: 'project cid'
             })
 
             expect(response.status).toBe(400)
@@ -602,47 +491,12 @@ describe('app', function () {
             })
         })
 
-        it('should return 400 when project creator is missing', async () => {
-            const response = await request(app.callback()).post('/projects').send({
-                name: 'project name',
-                cid: 'project cid',
-                offChainImageUrl: 'image url'
-            })
-
-            expect(response.status).toBe(400)
-            expect(response.body).toEqual({
-                error: 'MissingParameterError',
-                message: 'creator must be specified'
-            })
-        })
-
-        it('should return 403 when project creator is not the authenticated user', async () => {
-            authHandler.mockImplementation(async (ctx, next) => {
-                ctx.state.account = 'bogus user'
-                await next()
-            })
-
-            const response = await request(app.callback()).post('/projects').send({
-                name: 'project name',
-                cid: 'project cid',
-                creator: 'project creator',
-                offChainImageUrl: 'image url'
-            })
-
-            expect(response.status).toBe(403)
-            expect(response.body).toEqual({
-                error: 'UserUnauthorizedError',
-                message: 'The authenticated user is not authorized to perform this action'
-            })
-        })
-
         it('should return 400 when project name is too long', async () => {
             const response = await request(app.callback())
                 .post('/projects')
                 .send({
                     name: '#'.repeat(129),
                     cid: 'project cid',
-                    creator: 'project creator',
                     offChainImageUrl: 'image url'
                 })
 
@@ -659,7 +513,6 @@ describe('app', function () {
                 .send({
                     name: 'project name',
                     cid: 'project cid',
-                    creator: 'project creator',
                     offChainImageUrl: '#'.repeat(129)
                 })
 
@@ -667,42 +520,6 @@ describe('app', function () {
             expect(response.body).toEqual({
                 error: 'ParameterTooLongError',
                 message: 'offChainImageUrl is too long'
-            })
-        })
-
-        it('should return 400 when project creator is too long', async () => {
-            const response = await request(app.callback())
-                .post('/projects')
-                .send({
-                    name: 'project name',
-                    cid: 'project cid',
-                    offChainImageUrl: 'project url',
-                    creator: '#'.repeat(65)
-                })
-
-            expect(response.status).toBe(400)
-            expect(response.body).toEqual({
-                error: 'ParameterTooLongError',
-                message: 'creator is too long'
-            })
-        })
-
-        it('should return 400 when project creator is malformed', async () => {
-            mockStdlib.protect.mockImplementation(() => {
-                throw new Error()
-            })
-
-            const response = await request(app.callback()).post('/projects').send({
-                name: 'project name',
-                cid: 'project cid',
-                creator: 'project creator',
-                offChainImageUrl: 'image url'
-            })
-
-            expect(response.status).toBe(400)
-            expect(response.body).toEqual({
-                error: 'AddressMalformedError',
-                message: 'The specified address is malformed'
             })
         })
     })

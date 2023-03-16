@@ -7,35 +7,34 @@ export default class ProjectRepository extends DynamoDbRepository {
     userPrefix = 'user'
     itemName = 'project'
 
-    async createProject({ contractId, name, offChainImageUrl, creator, tokenId }) {
+    async createProject({ tokenId, userId, name, offChainImageUrl }) {
         const now = Date.now()
 
         return await this.put({
             item: {
-                pk: { S: `${this.projectPrefix}|${contractId}` },
-                gsi1pk: { S: `${this.userPrefix}|${creator}` },
-                gsi2pk: { S: `type|${this.itemName}` },
-                data: { S: `${this.itemName}|created|${now}` },
+                pk: { S: `${this.projectPrefix}|${tokenId}` },
+                gsi1pk: { S: `${this.userPrefix}|${userId}` },
+                gsi2pk: { S: `type|${this.projectPrefix}` },
+                data: { S: `${this.projectPrefix}|created|${now}` },
                 created: { N: now.toString() },
                 name: { S: name },
-                tokenId: { N: tokenId.toString() },
                 offChainImageUrl: { S: offChainImageUrl }
             },
             itemLogName: this.itemName
         })
     }
 
-    async getProject(contractId) {
+    async getProject(tokenId) {
         try {
             const data = await this.get({
-                key: { pk: { S: `${this.projectPrefix}|${contractId}` } },
+                key: { pk: { S: `${this.projectPrefix}|${tokenId}` } },
                 itemLogName: this.itemName
             })
 
             if (data.Item) {
                 return {
-                    id: contractId,
-                    creator: data.Item.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
+                    id: tokenId,
+                    userId: data.Item.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
                     name: data.Item.name.S,
                     status: data.Item.data.S.split('|')[1],
                     ...(data.Item.created && { created: parseInt(data.Item.created.N) }),

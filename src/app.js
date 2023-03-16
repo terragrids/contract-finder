@@ -6,14 +6,11 @@ import Router from '@koa/router'
 import bodyParser from 'koa-bodyparser'
 import errorHandler from './middleware/error-handler.js'
 import requestLogger from './middleware/request-logger.js'
-import DeployContractError from './error/deploy-contract.error.js'
 import ReachProvider from './provider/reach-provider.js'
 import * as backend from '../reach/project-contract/build/index.main.mjs'
-import { getContractFromJsonString, getJsonStringFromContract, truncateString } from './utils/string-utils.js'
-import { createPromise } from './utils/promise.js'
+import { getContractFromJsonString, truncateString } from './utils/string-utils.js'
 import MissingParameterError from './error/missing-parameter.error.js'
 import ParameterTooLongError from './error/parameter-too-long.error.js'
-import AddressMalformedError from './error/address-malformed.error.js'
 import DynamoDbRepository from './repository/dynamodb.repository.js'
 import ProjectRepository from './repository/project.repository.js'
 import ReadContractError from './error/read-contract.error.js'
@@ -25,6 +22,7 @@ import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-ut
 import AlgoIndexer from './network/algo-indexer.js'
 import AssetNotFoundError from './error/asset-not-found.error.js'
 import { isAdminWallet, isTokenAccepted } from './utils/wallet-utils.js'
+import jwtAuthorize from './middleware/jwt-authorize.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -66,30 +64,20 @@ router.get('/hc', async ctx => {
     }
 })
 
-router.post('/projects', authHandler, bodyParser(), async ctx => {
+router.post('/projects', jwtAuthorize, bodyParser(), async ctx => {
     if (!ctx.request.body.name) throw new MissingParameterError('name')
-    if (!ctx.request.body.creator) throw new MissingParameterError('creator')
     if (!ctx.request.body.cid) throw new MissingParameterError('cid')
     if (!ctx.request.body.offChainImageUrl) throw new MissingParameterError('offChainImageUrl')
 
     if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
-    if (ctx.request.body.creator.length > 64) throw new ParameterTooLongError('creator')
     if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
-    if (ctx.state.account !== ctx.request.body.creator) throw new UserUnauthorizedError()
 
     const stdlib = new ReachProvider().getStdlib()
     const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
 
-    try {
-        stdlib.protect(stdlib.T_Address, ctx.request.body.creator)
-    } catch (e) {
-        throw new AddressMalformedError(e)
-    }
-
     /**
      * Mint project token
      */
-
     let tokenId
     try {
         const cid = ctx.request.body.cid
@@ -116,45 +104,17 @@ router.post('/projects', authHandler, bodyParser(), async ctx => {
     }
 
     /**
-     * Deploy project contract
+     * Save project offchain
      */
+    await new ProjectRepository().createProject({
+        tokenId,
+        userId: ctx.state.jwt.sub,
+        name: ctx.request.body.name,
+        offChainImageUrl: ctx.request.body.offChainImageUrl
+    })
 
-    try {
-        const { promise, succeed, fail } = createPromise()
-
-        try {
-            const contract = algoAccount.contract(backend)
-            contract.p.Admin({
-                log: () => {},
-                onReady: async contract => {
-                    try {
-                        const contractId = getJsonStringFromContract(contract)
-                        await new ProjectRepository().createProject({
-                            contractId,
-                            name: ctx.request.body.name,
-                            offChainImageUrl: ctx.request.body.offChainImageUrl,
-                            creator: ctx.request.body.creator,
-                            tokenId
-                        })
-                        succeed(contractId)
-                    } catch (e) {
-                        fail(e)
-                    }
-                },
-                creator: ctx.request.body.creator,
-                token: tokenId
-            })
-        } catch (e) {
-            fail(e)
-        }
-
-        const contractInfo = await promise
-
-        ctx.body = { contractInfo, tokenId }
-        ctx.status = 201
-    } catch (e) {
-        throw new DeployContractError(e)
-    }
+    ctx.body = { tokenId }
+    ctx.status = 201
 })
 
 router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
