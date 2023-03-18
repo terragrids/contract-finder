@@ -1,21 +1,21 @@
 import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb'
-import ProjectNotFoundError from '../error/project-not-found.error.js'
+import PlaceNotFoundError from '../error/place-not-found.error.js'
 import DynamoDbRepository from './dynamodb.repository.js'
 
-export default class ProjectRepository extends DynamoDbRepository {
-    projectPrefix = 'project'
+export default class PlaceRepository extends DynamoDbRepository {
+    placePrefix = 'place'
     userPrefix = 'user'
-    itemName = 'project'
+    itemName = 'place'
 
-    async createProject({ tokenId, userId, name, offChainImageUrl }) {
+    async createPlace({ tokenId, userId, name, offChainImageUrl }) {
         const now = Date.now()
 
         return await this.put({
             item: {
-                pk: { S: `${this.projectPrefix}|${tokenId}` },
+                pk: { S: `${this.placePrefix}|${tokenId}` },
                 gsi1pk: { S: `${this.userPrefix}|${userId}` },
-                gsi2pk: { S: `type|${this.projectPrefix}` },
-                data: { S: `${this.projectPrefix}|created|${now}` },
+                gsi2pk: { S: `type|${this.placePrefix}` },
+                data: { S: `${this.placePrefix}|new|${now}` },
                 created: { N: now.toString() },
                 name: { S: name },
                 offChainImageUrl: { S: offChainImageUrl }
@@ -27,7 +27,7 @@ export default class ProjectRepository extends DynamoDbRepository {
     async getProject(tokenId) {
         try {
             const data = await this.get({
-                key: { pk: { S: `${this.projectPrefix}|${tokenId}` } },
+                key: { pk: { S: `${this.placePrefix}|${tokenId}` } },
                 itemLogName: this.itemName
             })
 
@@ -43,9 +43,9 @@ export default class ProjectRepository extends DynamoDbRepository {
                 }
             }
 
-            throw new ProjectNotFoundError()
+            throw new PlaceNotFoundError()
         } catch (e) {
-            if (e instanceof ConditionalCheckFailedException) throw new ProjectNotFoundError()
+            if (e instanceof ConditionalCheckFailedException) throw new PlaceNotFoundError()
             else throw e
         }
     }
@@ -53,7 +53,7 @@ export default class ProjectRepository extends DynamoDbRepository {
     async updateProject({ contractId, name, offChainImageUrl }) {
         try {
             await this.update({
-                key: { pk: { S: `${this.projectPrefix}|${contractId}` } },
+                key: { pk: { S: `${this.placePrefix}|${contractId}` } },
                 attributes: {
                     ...(name && { '#name': { S: name } }),
                     ...(offChainImageUrl && { offChainImageUrl: { S: offChainImageUrl } })
@@ -61,7 +61,7 @@ export default class ProjectRepository extends DynamoDbRepository {
                 itemLogName: this.itemName
             })
         } catch (e) {
-            if (e instanceof ConditionalCheckFailedException) throw new ProjectNotFoundError()
+            if (e instanceof ConditionalCheckFailedException) throw new PlaceNotFoundError()
             else throw e
         }
     }
@@ -71,7 +71,7 @@ export default class ProjectRepository extends DynamoDbRepository {
             const state = approved ? 'approved' : 'rejected'
             const now = Date.now()
             await this.update({
-                key: { pk: { S: `${this.projectPrefix}|${contractId}` } },
+                key: { pk: { S: `${this.placePrefix}|${contractId}` } },
                 attributes: {
                     '#data': { S: `${this.itemName}|${state}|${now}` },
                     approvalDate: { N: now.toString() }
@@ -79,7 +79,7 @@ export default class ProjectRepository extends DynamoDbRepository {
                 itemLogName: this.itemName
             })
         } catch (e) {
-            if (e instanceof ConditionalCheckFailedException) throw new ProjectNotFoundError()
+            if (e instanceof ConditionalCheckFailedException) throw new PlaceNotFoundError()
             else throw e
         }
     }
@@ -153,13 +153,13 @@ export default class ProjectRepository extends DynamoDbRepository {
         try {
             if (permanent) {
                 await this.delete({
-                    key: { pk: { S: `${this.projectPrefix}|${contractId}` } },
+                    key: { pk: { S: `${this.placePrefix}|${contractId}` } },
                     itemLogName: this.itemName
                 })
             } else {
                 const now = Date.now()
                 await this.update({
-                    key: { pk: { S: `${this.projectPrefix}|${contractId}` } },
+                    key: { pk: { S: `${this.placePrefix}|${contractId}` } },
                     attributes: {
                         '#data': { S: `${this.itemName}|archived|${now}` },
                         archived: { N: now.toString() }
@@ -168,7 +168,7 @@ export default class ProjectRepository extends DynamoDbRepository {
                 })
             }
         } catch (e) {
-            if (e instanceof ConditionalCheckFailedException) throw new ProjectNotFoundError()
+            if (e instanceof ConditionalCheckFailedException) throw new PlaceNotFoundError()
             else throw e
         }
     }

@@ -12,7 +12,7 @@ import { getContractFromJsonString, truncateString } from './utils/string-utils.
 import MissingParameterError from './error/missing-parameter.error.js'
 import ParameterTooLongError from './error/parameter-too-long.error.js'
 import DynamoDbRepository from './repository/dynamodb.repository.js'
-import ProjectRepository from './repository/project.repository.js'
+import PlaceRepository from './repository/place.repository.js'
 import ReadContractError from './error/read-contract.error.js'
 import UpdateContractError from './error/update-contract.error.js'
 import authHandler from './middleware/auth-handler.js'
@@ -64,7 +64,7 @@ router.get('/hc', async ctx => {
     }
 })
 
-router.post('/projects', jwtAuthorize, bodyParser(), async ctx => {
+router.post('/places', jwtAuthorize, bodyParser(), async ctx => {
     if (!ctx.request.body.name) throw new MissingParameterError('name')
     if (!ctx.request.body.cid) throw new MissingParameterError('cid')
     if (!ctx.request.body.offChainImageUrl) throw new MissingParameterError('offChainImageUrl')
@@ -76,7 +76,7 @@ router.post('/projects', jwtAuthorize, bodyParser(), async ctx => {
     const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
 
     /**
-     * Mint project token
+     * Mint place token
      */
     let tokenId
     try {
@@ -104,9 +104,9 @@ router.post('/projects', jwtAuthorize, bodyParser(), async ctx => {
     }
 
     /**
-     * Save project offchain
+     * Save place offchain
      */
-    await new ProjectRepository().createProject({
+    await new PlaceRepository().createPlace({
         tokenId,
         userId: ctx.state.jwt.sub,
         name: ctx.request.body.name,
@@ -127,7 +127,7 @@ router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
 
     const infoObject = getContractFromJsonString(ctx.params.contractId)
 
-    const repository = new ProjectRepository()
+    const repository = new PlaceRepository()
     const project = await repository.getProject(ctx.params.contractId)
 
     // Admins or creators can update project details
@@ -209,7 +209,7 @@ router.put('/projects/:contractId/approval', authHandler, bodyParser(), async ct
             await api.setApprovalState(false)
         }
 
-        await new ProjectRepository().setProjectApproval(ctx.params.contractId, approved)
+        await new PlaceRepository().setProjectApproval(ctx.params.contractId, approved)
 
         ctx.status = 204
     } catch (e) {
@@ -218,7 +218,7 @@ router.put('/projects/:contractId/approval', authHandler, bodyParser(), async ct
 })
 
 router.get('/projects', async ctx => {
-    const projects = await new ProjectRepository().getProjects({
+    const projects = await new PlaceRepository().getProjects({
         sort: ctx.request.query.sort,
         status: ctx.request.query.status,
         pageSize: ctx.request.query.pageSize,
@@ -230,7 +230,7 @@ router.get('/projects', async ctx => {
 
 router.get('/projects/:contractId', async ctx => {
     const infoObject = getContractFromJsonString(ctx.params.contractId)
-    const project = await new ProjectRepository().getProject(ctx.params.contractId)
+    const project = await new PlaceRepository().getProject(ctx.params.contractId)
 
     let balance, tokenBalance, tokenId, creator, approved, tokenCreatorOptIn
     try {
@@ -269,7 +269,7 @@ router.get('/projects/:contractId', async ctx => {
 })
 
 router.get('/creators/:creatorId/projects', async ctx => {
-    const projects = await new ProjectRepository().getProjectsByCreator({
+    const projects = await new PlaceRepository().getProjectsByCreator({
         creator: ctx.params.creatorId,
         sort: ctx.request.query.sort,
         status: ctx.request.query.status,
@@ -284,7 +284,7 @@ router.delete('/projects/:contractId', authHandler, async ctx => {
     if (!isAdminWallet(ctx.state.account)) throw new UserUnauthorizedError()
 
     const infoObject = getContractFromJsonString(ctx.params.contractId)
-    await new ProjectRepository().deleteProject(ctx.params.contractId, ctx.request.query.permanent === 'true')
+    await new PlaceRepository().deleteProject(ctx.params.contractId, ctx.request.query.permanent === 'true')
 
     const stdlib = new ReachProvider().getStdlib()
     const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
