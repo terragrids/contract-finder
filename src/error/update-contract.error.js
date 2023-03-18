@@ -12,7 +12,7 @@ export default class UpdateContractError extends GenericError {
     toJson() {
         return {
             error: 'UpdateContractError',
-            message: 'Unable to update project contract'
+            message: 'Unable to update place contract'
         }
     }
 }

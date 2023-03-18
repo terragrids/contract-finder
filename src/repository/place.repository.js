@@ -24,7 +24,7 @@ export default class PlaceRepository extends DynamoDbRepository {
         })
     }
 
-    async getProject(tokenId) {
+    async getPlace(tokenId) {
         try {
             const data = await this.get({
                 key: { pk: { S: `${this.placePrefix}|${tokenId}` } },
@@ -50,10 +50,10 @@ export default class PlaceRepository extends DynamoDbRepository {
         }
     }
 
-    async updateProject({ contractId, name, offChainImageUrl }) {
+    async updatePlace({ tokenId, name, offChainImageUrl }) {
         try {
             await this.update({
-                key: { pk: { S: `${this.placePrefix}|${contractId}` } },
+                key: { pk: { S: `${this.placePrefix}|${tokenId}` } },
                 attributes: {
                     ...(name && { '#name': { S: name } }),
                     ...(offChainImageUrl && { offChainImageUrl: { S: offChainImageUrl } })

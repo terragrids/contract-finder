@@ -29,7 +29,7 @@ export const app = new Koa()
 const router = new Router()
 
 router.get('/', ctx => {
-    ctx.body = 'terragrids project contract api'
+    ctx.body = 'terragrids place contract api'
 })
 
 router.get('/hc', async ctx => {
@@ -117,7 +117,7 @@ router.post('/places', jwtAuthorize, bodyParser(), async ctx => {
     ctx.status = 201
 })
 
-router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
+router.put('/places/:contractId', authHandler, bodyParser(), async ctx => {
     if (!ctx.request.body.name) throw new MissingParameterError('name')
     if (!ctx.request.body.cid) throw new MissingParameterError('cid')
     if (!ctx.request.body.offChainImageUrl) throw new MissingParameterError('offChainImageUrl')
@@ -128,10 +128,10 @@ router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
     const infoObject = getContractFromJsonString(ctx.params.contractId)
 
     const repository = new PlaceRepository()
-    const project = await repository.getProject(ctx.params.contractId)
+    const place = await repository.getPlace(ctx.params.contractId)
 
-    // Admins or creators can update project details
-    if (ctx.state.account !== project.creator && !isAdminWallet(ctx.state.account)) throw new UserUnauthorizedError()
+    // Admins or creators can update place details
+    if (ctx.state.account !== place.creator && !isAdminWallet(ctx.state.account)) throw new UserUnauthorizedError()
 
     try {
         const stdlib = new ReachProvider().getStdlib()
@@ -168,7 +168,7 @@ router.put('/projects/:contractId', authHandler, bodyParser(), async ctx => {
         let txnResponse = await algoClient.sendRawTransaction(rawSignedTxn).do()
         await stdlib.algosdk.waitForConfirmation(algoClient, txnResponse.txId, 4)
 
-        await repository.updateProject({
+        await repository.updatePlace({
             contractId: ctx.params.contractId,
             name: ctx.request.body.name,
             cid: ctx.request.body.cid,
@@ -230,7 +230,7 @@ router.get('/projects', async ctx => {
 
 router.get('/projects/:contractId', async ctx => {
     const infoObject = getContractFromJsonString(ctx.params.contractId)
-    const project = await new PlaceRepository().getProject(ctx.params.contractId)
+    const project = await new PlaceRepository().getPlace(ctx.params.contractId)
 
     let balance, tokenBalance, tokenId, creator, approved, tokenCreatorOptIn
     try {
