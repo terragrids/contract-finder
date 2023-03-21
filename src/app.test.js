@@ -48,7 +48,7 @@ const mockPlaceRepository = {
     createPlace: jest.fn().mockImplementation(() => jest.fn()),
     updatePlace: jest.fn().mockImplementation(() => jest.fn()),
     getPlace: jest.fn().mockImplementation(() => jest.fn()),
-    getProjects: jest.fn().mockImplementation(() => jest.fn()),
+    getPlaces: jest.fn().mockImplementation(() => jest.fn()),
     getProjectsByCreator: jest.fn().mockImplementation(() => jest.fn()),
     deleteProject: jest.fn().mockImplementation(() => jest.fn()),
     setProjectApproval: jest.fn().mockImplementation(() => jest.fn())
@@ -58,7 +58,7 @@ jest.mock('./repository/place.repository.js', () =>
         createPlace: mockPlaceRepository.createPlace,
         updatePlace: mockPlaceRepository.updatePlace,
         getPlace: mockPlaceRepository.getPlace,
-        getProjects: mockPlaceRepository.getProjects,
+        getPlaces: mockPlaceRepository.getPlaces,
         getProjectsByCreator: mockPlaceRepository.getProjectsByCreator,
         deleteProject: mockPlaceRepository.deleteProject,
         setProjectApproval: mockPlaceRepository.setProjectApproval
@@ -1449,10 +1449,10 @@ describe('app', function () {
         })
     })
 
-    describe('get projects endpoint', function () {
-        it('should return 200 when getting projects and all is fine', async () => {
-            mockPlaceRepository.getProjects.mockImplementation(() => ({
-                projects: [
+    describe('get places endpoint', function () {
+        it('should return 200 when getting places and all is fine', async () => {
+            mockPlaceRepository.getPlaces.mockImplementation(() => ({
+                places: [
                     {
                         id: 'contract-id-1',
                         created: 'contract-date-1'
@@ -1464,10 +1464,10 @@ describe('app', function () {
                 ]
             }))
 
-            const response = await request(app.callback()).get('/projects?sort=asc&status=approved&pageSize=12&nextPageKey=page-key')
+            const response = await request(app.callback()).get('/places?sort=asc&status=approved&pageSize=12&nextPageKey=page-key')
 
-            expect(mockPlaceRepository.getProjects).toHaveBeenCalledTimes(1)
-            expect(mockPlaceRepository.getProjects).toHaveBeenCalledWith({
+            expect(mockPlaceRepository.getPlaces).toHaveBeenCalledTimes(1)
+            expect(mockPlaceRepository.getPlaces).toHaveBeenCalledWith({
                 sort: 'asc',
                 status: 'approved',
                 nextPageKey: 'page-key',
@@ -1476,7 +1476,7 @@ describe('app', function () {
 
             expect(response.status).toBe(200)
             expect(response.body).toEqual({
-                projects: [
+                places: [
                     {
                         id: 'contract-id-1',
                         created: 'contract-date-1'

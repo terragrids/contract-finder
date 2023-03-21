@@ -84,7 +84,7 @@ export default class PlaceRepository extends DynamoDbRepository {
         }
     }
 
-    async getProjects({ pageSize, nextPageKey, sort, status }) {
+    async getPlaces({ pageSize, nextPageKey, sort, status }) {
         const forward = sort && sort === 'desc' ? false : true
         let condition = 'gsi2pk = :gsi2pk'
         if (status) {
@@ -95,8 +95,8 @@ export default class PlaceRepository extends DynamoDbRepository {
             conditionExpression: condition,
             ...(status && { attributeNames: { '#data': 'data' } }),
             attributeValues: {
-                ':gsi2pk': { S: `type|${this.itemName}` },
-                ...(status && { ':status': { S: `${this.itemName}|${status}` } })
+                ':gsi2pk': { S: `type|${this.placePrefix}` },
+                ...(status && { ':status': { S: `${this.placePrefix}|${status}` } })
             },
             pageSize,
             nextPageKey,
@@ -104,8 +104,8 @@ export default class PlaceRepository extends DynamoDbRepository {
         })
 
         return {
-            projects: data.items.map(project => ({
-                id: project.pk.S.replace('project|', ''),
+            places: data.items.map(project => ({
+                id: project.pk.S.replace(`|`, ''),
                 status: project.data.S.split('|')[1],
                 creator: project.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
                 ...(project.name && { name: project.name.S }),

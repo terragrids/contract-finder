@@ -217,8 +217,8 @@ router.put('/projects/:contractId/approval', authHandler, bodyParser(), async ct
     }
 })
 
-router.get('/projects', async ctx => {
-    const projects = await new PlaceRepository().getProjects({
+router.get('/places', async ctx => {
+    const projects = await new PlaceRepository().getPlaces({
         sort: ctx.request.query.sort,
         status: ctx.request.query.status,
         pageSize: ctx.request.query.pageSize,
