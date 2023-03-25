@@ -65,6 +65,15 @@ jest.mock('./repository/place.repository.js', () =>
     }))
 )
 
+const mockUserRepository = {
+    getUserById: jest.fn().mockImplementation(() => jest.fn())
+}
+jest.mock('./repository/user.repository.js', () =>
+    jest.fn().mockImplementation(() => ({
+        getUserById: mockUserRepository.getUserById
+    }))
+)
+
 jest.mock('../reach/project-contract/build/index.main.mjs', () => jest.fn().mockImplementation(() => ({})))
 
 import authHandler from './middleware/auth-handler.js'
@@ -319,11 +328,13 @@ describe('app', function () {
             const response = await request(app.callback()).post('/places').send({
                 name: 'place name',
                 cid: 'place cid',
-                offChainImageUrl: 'image url'
+                offChainImageUrl: 'image url',
+                positionX: 0,
+                positionY: 3
             })
 
             expect(mockStdlib.launchToken).toHaveBeenCalledTimes(1)
-            expect(mockStdlib.launchToken).toHaveBeenCalledWith(expect.any(Object), 'place name', 'TRPRJ', {
+            expect(mockStdlib.launchToken).toHaveBeenCalledWith(expect.any(Object), 'place name', 'TRPLC', {
                 decimals: 0,
                 manager: 'wallet_address',
                 clawback: 'wallet_address',
@@ -338,7 +349,9 @@ describe('app', function () {
                 userId: 'jwt_sub',
                 name: 'place name',
                 offChainImageUrl: 'image url',
-                tokenId: 1234
+                tokenId: 1234,
+                positionX: 0,
+                positionY: 3
             })
 
             expect(response.status).toBe(201)
@@ -363,11 +376,13 @@ describe('app', function () {
                 name: 'Louisville and Nashville Railroad Office Building',
                 cid: 'place cid',
                 creator: 'place creator',
-                offChainImageUrl: 'image url'
+                offChainImageUrl: 'image url',
+                positionX: 3,
+                positionY: 0
             })
 
             expect(mockStdlib.launchToken).toHaveBeenCalledTimes(1)
-            expect(mockStdlib.launchToken).toHaveBeenCalledWith(expect.any(Object), 'Louisville and Nashville Rail…', 'TRPRJ', {
+            expect(mockStdlib.launchToken).toHaveBeenCalledWith(expect.any(Object), 'Louisville and Nashville Rail…', 'TRPLC', {
                 decimals: 0,
                 manager: 'wallet_address',
                 clawback: 'wallet_address',
@@ -382,7 +397,9 @@ describe('app', function () {
                 userId: 'jwt_sub',
                 name: 'Louisville and Nashville Railroad Office Building',
                 offChainImageUrl: 'image url',
-                tokenId: 1234
+                tokenId: 1234,
+                positionX: 3,
+                positionY: 0
             })
 
             expect(response.status).toBe(201)
@@ -399,7 +416,9 @@ describe('app', function () {
             const response = await request(app.callback()).post('/places').send({
                 name: 'place name',
                 cid: 'place cid',
-                offChainImageUrl: 'image url'
+                offChainImageUrl: 'image url',
+                positionX: 3,
+                positionY: 0
             })
 
             expect(response.status).toBe(500)
@@ -416,7 +435,9 @@ describe('app', function () {
             const response = await request(app.callback()).post('/places').send({
                 name: 'place name',
                 cid: 'place cid',
-                offChainImageUrl: 'image url'
+                offChainImageUrl: 'image url',
+                positionX: 3,
+                positionY: 0
             })
 
             expect(response.status).toBe(500)
@@ -445,7 +466,9 @@ describe('app', function () {
             const response = await request(app.callback()).post('/places').send({
                 name: 'place name',
                 cid: 'place cid',
-                offChainImageUrl: 'image url'
+                offChainImageUrl: 'image url',
+                positionX: 3,
+                positionY: 2
             })
 
             expect(response.status).toBe(500)
@@ -455,7 +478,9 @@ describe('app', function () {
         it('should return 400 when place name is missing', async () => {
             const response = await request(app.callback()).post('/places').send({
                 cid: 'place cid',
-                offChainImageUrl: 'image url'
+                offChainImageUrl: 'image url',
+                positionX: 3,
+                positionY: 2
             })
 
             expect(response.status).toBe(400)
@@ -468,7 +493,9 @@ describe('app', function () {
         it('should return 400 when place cid is missing', async () => {
             const response = await request(app.callback()).post('/places').send({
                 name: 'place name',
-                offChainImageUrl: 'image url'
+                offChainImageUrl: 'image url',
+                positionX: 3,
+                positionY: 2
             })
 
             expect(response.status).toBe(400)
@@ -481,7 +508,9 @@ describe('app', function () {
         it('should return 400 when place offChainImageUrl is missing', async () => {
             const response = await request(app.callback()).post('/places').send({
                 name: 'place name',
-                cid: 'place cid'
+                cid: 'place cid',
+                positionX: 3,
+                positionY: 2
             })
 
             expect(response.status).toBe(400)
@@ -491,13 +520,77 @@ describe('app', function () {
             })
         })
 
+        it('should return 400 when place positionX is missing', async () => {
+            const response = await request(app.callback()).post('/places').send({
+                name: 'place name',
+                cid: 'place cid',
+                offChainImageUrl: 'image url',
+                positionY: 2
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'TypePositiveOrZeroNumberError',
+                message: 'positionX must be zero or a positive number'
+            })
+        })
+
+        it('should return 400 when place positionX is not valid', async () => {
+            const response = await request(app.callback()).post('/places').send({
+                name: 'place name',
+                cid: 'place cid',
+                offChainImageUrl: 'image url',
+                positionX: -2,
+                positionY: 2
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'TypePositiveOrZeroNumberError',
+                message: 'positionX must be zero or a positive number'
+            })
+        })
+
+        it('should return 400 when place positionY is missing', async () => {
+            const response = await request(app.callback()).post('/places').send({
+                name: 'place name',
+                cid: 'place cid',
+                offChainImageUrl: 'image url',
+                positionX: 2
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'TypePositiveOrZeroNumberError',
+                message: 'positionY must be zero or a positive number'
+            })
+        })
+
+        it('should return 400 when place positionY is not valid', async () => {
+            const response = await request(app.callback()).post('/places').send({
+                name: 'place name',
+                cid: 'place cid',
+                offChainImageUrl: 'image url',
+                positionX: 2,
+                positionY: -2
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'TypePositiveOrZeroNumberError',
+                message: 'positionY must be zero or a positive number'
+            })
+        })
+
         it('should return 400 when place name is too long', async () => {
             const response = await request(app.callback())
                 .post('/places')
                 .send({
                     name: '#'.repeat(129),
                     cid: 'place cid',
-                    offChainImageUrl: 'image url'
+                    offChainImageUrl: 'image url',
+                    positionX: 3,
+                    positionY: 2
                 })
 
             expect(response.status).toBe(400)
@@ -513,7 +606,9 @@ describe('app', function () {
                 .send({
                     name: 'place name',
                     cid: 'place cid',
-                    offChainImageUrl: '#'.repeat(129)
+                    offChainImageUrl: '#'.repeat(129),
+                    positionX: 3,
+                    positionY: 2
                 })
 
             expect(response.status).toBe(400)
@@ -1173,229 +1268,284 @@ describe('app', function () {
         })
     })
 
-    describe('get project endpoint', function () {
-        beforeEach(() => {
-            mockStdlib.formatAddress.mockImplementation(address => `formatted ${address}`)
-        })
-
-        it('should return 200 when getting project and creator has not opted in to the token', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+    describe('get place endpoint', function () {
+        it('should return 200 when getting place and user has wallet and has not opted in to the token', async () => {
+            const tokenId = 'token-id'
 
             mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: contractId,
-                created: 'creation-date',
-                creator: 'creator'
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date'
+            }))
+
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id',
+                walletAddress: 'wallet-address'
             }))
 
             mockStdlib.tokensAccepted.mockImplementation(() => [
                 {
-                    toNumber: () => 'other_project_token_id'
+                    toNumber: () => 'other-token-id'
                 }
             ])
 
-            const view = {
-                View: {
-                    balance: () => [0, { toNumber: () => 123 }],
-                    tokenBalance: () => [0, { toNumber: () => 1 }],
-                    token: () => [0, { toNumber: () => 'project_token_id' }],
-                    creator: () => [0, 'project_creator'],
-                    approved: () => [0, true]
-                }
-            }
-
-            mockStdlib.createAccount.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    v: view
-                })
-            }))
-
-            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
-                return Promise.resolve({
-                    status: 200,
-                    json: {
-                        asset: {
-                            index: 123,
-                            params: {
-                                name: 'project name',
-                                total: 1,
-                                decimals: 0,
-                                'unit-name': 'TRPRJ',
-                                url: 'project url',
-                                reserve: 'project reserve'
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(params => {
+                switch (params) {
+                    case `assets/${tokenId}`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                asset: {
+                                    index: tokenId,
+                                    params: {
+                                        name: 'place name',
+                                        total: 1,
+                                        decimals: 0,
+                                        'unit-name': 'TRPLC',
+                                        url: 'place url',
+                                        reserve: 'place reserve'
+                                    }
+                                }
                             }
-                        }
-                    }
-                })
+                        })
+                    case `assets/${tokenId}/balances`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                balances: [
+                                    {
+                                        address: 'other-wallet-address',
+                                        amount: 1,
+                                        deleted: false
+                                    }
+                                ]
+                            }
+                        })
+                }
             })
 
-            const response = await request(app.callback()).get(`/projects/${contractId}`)
+            const response = await request(app.callback()).get(`/places/${tokenId}`)
 
             expect(mockPlaceRepository.getPlace).toHaveBeenCalledTimes(1)
-            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(contractId)
+            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
 
             expect(response.status).toBe(200)
             expect(response.body).toEqual({
-                id: contractId,
-                creator: 'formatted project_creator',
+                id: tokenId,
+                userId: 'user-id',
                 created: 'creation-date',
-                name: 'project name',
-                url: 'project url',
-                reserve: 'project reserve',
-                tokenId: 'project_token_id',
+                name: 'place name',
+                url: 'place url',
+                reserve: 'place reserve',
                 tokenCreatorOptIn: false,
-                balance: 123,
-                approved: true,
-                tokenPaid: false
+                userWalletOwned: false
             })
         })
 
-        it('should return 200 when getting project and creator has opted in to the token', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+        it('should return 200 when getting place and user has wallet and has opted in to the token', async () => {
+            const tokenId = 'token-id'
 
             mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: contractId,
-                created: 'creation-date',
-                creator: 'creator'
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date'
+            }))
+
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id',
+                walletAddress: 'wallet-address'
             }))
 
             mockStdlib.tokensAccepted.mockImplementation(() => [
                 {
-                    toNumber: () => 'project_token_id'
+                    toNumber: () => 'token-id'
                 }
             ])
 
-            const view = {
-                View: {
-                    balance: () => [0, { toNumber: () => 123 }],
-                    tokenBalance: () => [0, { toNumber: () => 1 }],
-                    token: () => [0, { toNumber: () => 'project_token_id' }],
-                    creator: () => [0, 'project_creator'],
-                    approved: () => [0, true]
-                }
-            }
-
-            mockStdlib.createAccount.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    v: view
-                })
-            }))
-
-            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
-                return Promise.resolve({
-                    status: 200,
-                    json: {
-                        asset: {
-                            index: 123,
-                            params: {
-                                name: 'project name',
-                                total: 1,
-                                decimals: 0,
-                                'unit-name': 'TRPRJ',
-                                url: 'project url',
-                                reserve: 'project reserve'
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(params => {
+                switch (params) {
+                    case `assets/${tokenId}`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                asset: {
+                                    index: tokenId,
+                                    params: {
+                                        name: 'place name',
+                                        total: 1,
+                                        decimals: 0,
+                                        'unit-name': 'TRPLC',
+                                        url: 'place url',
+                                        reserve: 'place reserve'
+                                    }
+                                }
                             }
-                        }
-                    }
-                })
+                        })
+                    case `assets/${tokenId}/balances`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                balances: [
+                                    {
+                                        address: 'other-wallet-address',
+                                        amount: 1,
+                                        deleted: false
+                                    }
+                                ]
+                            }
+                        })
+                }
             })
 
-            const response = await request(app.callback()).get(`/projects/${contractId}`)
+            const response = await request(app.callback()).get(`/places/${tokenId}`)
 
             expect(mockPlaceRepository.getPlace).toHaveBeenCalledTimes(1)
-            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(contractId)
+            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
 
             expect(response.status).toBe(200)
             expect(response.body).toEqual({
-                id: contractId,
-                creator: 'formatted project_creator',
+                id: tokenId,
+                userId: 'user-id',
                 created: 'creation-date',
-                name: 'project name',
-                url: 'project url',
-                reserve: 'project reserve',
-                tokenId: 'project_token_id',
+                name: 'place name',
+                url: 'place url',
+                reserve: 'place reserve',
                 tokenCreatorOptIn: true,
-                balance: 123,
-                approved: true,
-                tokenPaid: false
+                userWalletOwned: false
             })
         })
 
-        it('should return 500 when getting project and create account fails', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+        it('should return 200 when getting place and user has token in wallet', async () => {
+            const tokenId = 'token-id'
 
             mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: contractId,
-                creator: 'creator'
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date'
             }))
 
-            mockStdlib.createAccount.mockImplementation(() => {
-                throw new Error()
-            })
-
-            const response = await request(app.callback()).get(`/projects/${contractId}`)
-
-            expect(mockPlaceRepository.getPlace).toHaveBeenCalledTimes(1)
-            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(contractId)
-
-            expect(response.status).toBe(500)
-            expect(response.body).toEqual({
-                error: 'ReadContractError',
-                message: 'Unable to read project contract'
-            })
-        })
-
-        it('should return 404 when getting project and token not found', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-
-            mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: contractId,
-                created: 'creation-date',
-                creator: 'creator'
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id',
+                walletAddress: 'wallet-address'
             }))
 
-            const view = {
-                View: {
-                    balance: () => [0, { toNumber: () => 123 }],
-                    tokenBalance: () => [0, { toNumber: () => 0 }],
-                    token: () => [0, { toNumber: () => 'project token id' }],
-                    creator: () => [0, 'place creator'],
-                    approved: () => [0, false]
+            mockStdlib.tokensAccepted.mockImplementation(() => [
+                {
+                    toNumber: () => 'token-id'
                 }
-            }
+            ])
 
-            mockStdlib.createAccount.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    v: view
-                })
-            }))
-
-            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
-                return Promise.resolve({
-                    status: 200,
-                    json: {
-                        asset: {
-                            index: 123,
-                            deleted: true,
-                            params: {
-                                name: 'project name',
-                                total: 1,
-                                decimals: 0,
-                                'unit-name': 'TRPRJ',
-                                url: 'project url',
-                                reserve: 'project reserve'
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(params => {
+                switch (params) {
+                    case `assets/${tokenId}`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                asset: {
+                                    index: tokenId,
+                                    params: {
+                                        name: 'place name',
+                                        total: 1,
+                                        decimals: 0,
+                                        'unit-name': 'TRPLC',
+                                        url: 'place url',
+                                        reserve: 'place reserve'
+                                    }
+                                }
                             }
-                        }
-                    }
-                })
+                        })
+                    case `assets/${tokenId}/balances`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                balances: [
+                                    {
+                                        address: 'wallet-address',
+                                        amount: 1,
+                                        deleted: false
+                                    }
+                                ]
+                            }
+                        })
+                }
             })
 
-            const response = await request(app.callback()).get(`/projects/${contractId}`)
+            const response = await request(app.callback()).get(`/places/${tokenId}`)
 
             expect(mockPlaceRepository.getPlace).toHaveBeenCalledTimes(1)
-            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(contractId)
+            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date',
+                name: 'place name',
+                url: 'place url',
+                reserve: 'place reserve',
+                tokenCreatorOptIn: true,
+                userWalletOwned: true
+            })
+        })
+
+        it('should return 200 when getting place and user has registered wallet and asset not found in indexer', async () => {
+            const tokenId = 'token-id'
+
+            mockPlaceRepository.getPlace.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date'
+            }))
+
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id',
+                walletAddress: 'wallet-address'
+            }))
+
+            mockStdlib.tokensAccepted.mockImplementation(() => [
+                {
+                    toNumber: () => 'token-id'
+                }
+            ])
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(params => {
+                switch (params) {
+                    case `assets/${tokenId}`:
+                        return Promise.resolve({
+                            status: 404
+                        })
+                    case `assets/${tokenId}/balances`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                balances: [
+                                    {
+                                        address: 'wallet-address',
+                                        amount: 1,
+                                        deleted: false
+                                    }
+                                ]
+                            }
+                        })
+                }
+            })
+
+            const response = await request(app.callback()).get(`/places/${tokenId}`)
+
+            expect(mockPlaceRepository.getPlace).toHaveBeenCalledTimes(1)
+            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
 
             expect(response.status).toBe(404)
             expect(response.body).toEqual({
@@ -1404,30 +1554,68 @@ describe('app', function () {
             })
         })
 
-        it('should return 404 when getting project and token deleted', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+        it('should return 200 when getting place and user does not have registered wallet', async () => {
+            const tokenId = 'token-id'
 
             mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: contractId,
-                created: 'creation-date',
-                creator: 'creator'
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date'
             }))
 
-            const view = {
-                View: {
-                    balance: () => [0, { toNumber: () => 123 }],
-                    tokenBalance: () => [0, { toNumber: () => 0 }],
-                    token: () => [0, { toNumber: () => 'project token id' }],
-                    creator: () => [0, 'place creator'],
-                    approved: () => [0, false]
-                }
-            }
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id'
+            }))
 
-            mockStdlib.createAccount.mockImplementation(() => ({
-                networkAccount: {},
-                contract: () => ({
-                    v: view
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
+                return Promise.resolve({
+                    status: 200,
+                    json: {
+                        asset: {
+                            index: 123,
+                            params: {
+                                name: 'place name',
+                                total: 1,
+                                decimals: 0,
+                                'unit-name': 'TRPLC',
+                                url: 'place url',
+                                reserve: 'place reserve'
+                            }
+                        }
+                    }
                 })
+            })
+
+            const response = await request(app.callback()).get(`/places/${tokenId}`)
+
+            expect(mockPlaceRepository.getPlace).toHaveBeenCalledTimes(1)
+            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date',
+                name: 'place name',
+                url: 'place url',
+                reserve: 'place reserve'
+            })
+        })
+
+        it('should return 200 when getting place and token not found in indexer', async () => {
+            const tokenId = 'token-id'
+
+            mockPlaceRepository.getPlace.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date'
+            }))
+
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id'
             }))
 
             mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
@@ -1436,10 +1624,61 @@ describe('app', function () {
                 })
             })
 
-            const response = await request(app.callback()).get(`/projects/${contractId}`)
+            const response = await request(app.callback()).get(`/places/${tokenId}`)
 
             expect(mockPlaceRepository.getPlace).toHaveBeenCalledTimes(1)
-            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(contractId)
+            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
+
+            expect(response.status).toBe(404)
+            expect(response.body).toEqual({
+                error: 'AssetNotFoundError',
+                message: 'Asset specified not found'
+            })
+        })
+
+        it('should return 200 when getting place and token deleted in indexer', async () => {
+            const tokenId = 'token-id'
+
+            mockPlaceRepository.getPlace.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date'
+            }))
+
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id'
+            }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
+                return Promise.resolve({
+                    status: 200,
+                    json: {
+                        asset: {
+                            index: tokenId,
+                            deleted: true,
+                            params: {
+                                name: 'place name',
+                                total: 1,
+                                decimals: 0,
+                                'unit-name': 'TRPLC',
+                                url: 'place url',
+                                reserve: 'place reserve'
+                            }
+                        }
+                    }
+                })
+            })
+
+            const response = await request(app.callback()).get(`/places/${tokenId}`)
+
+            expect(mockPlaceRepository.getPlace).toHaveBeenCalledTimes(1)
+            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
 
             expect(response.status).toBe(404)
             expect(response.body).toEqual({

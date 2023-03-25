@@ -13,7 +13,6 @@ import MissingParameterError from './error/missing-parameter.error.js'
 import ParameterTooLongError from './error/parameter-too-long.error.js'
 import DynamoDbRepository from './repository/dynamodb.repository.js'
 import PlaceRepository from './repository/place.repository.js'
-import ReadContractError from './error/read-contract.error.js'
 import UpdateContractError from './error/update-contract.error.js'
 import authHandler from './middleware/auth-handler.js'
 import { UserUnauthorizedError } from './error/user-unauthorized-error.js'
@@ -23,6 +22,9 @@ import AlgoIndexer from './network/algo-indexer.js'
 import AssetNotFoundError from './error/asset-not-found.error.js'
 import { isAdminWallet, isTokenAccepted } from './utils/wallet-utils.js'
 import jwtAuthorize from './middleware/jwt-authorize.js'
+import UserRepository from './repository/user.repository.js'
+import { TypePositiveOrZeroNumberError } from './error/type-positive-number.error.js'
+import { isPositiveOrZeroNumber } from './utils/validators.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -68,6 +70,8 @@ router.post('/places', jwtAuthorize, bodyParser(), async ctx => {
     if (!ctx.request.body.name) throw new MissingParameterError('name')
     if (!ctx.request.body.cid) throw new MissingParameterError('cid')
     if (!ctx.request.body.offChainImageUrl) throw new MissingParameterError('offChainImageUrl')
+    if (!isPositiveOrZeroNumber(ctx.request.body.positionX)) throw new TypePositiveOrZeroNumberError('positionX')
+    if (!isPositiveOrZeroNumber(ctx.request.body.positionY)) throw new TypePositiveOrZeroNumberError('positionY')
 
     if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
     if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
@@ -88,7 +92,7 @@ router.post('/places', jwtAuthorize, bodyParser(), async ctx => {
         const managerAddress = algoAccount.networkAccount.addr
         const assetName = truncateString(ctx.request.body.name, 32)
 
-        const token = await stdlib.launchToken(algoAccount, assetName, 'TRPRJ', {
+        const token = await stdlib.launchToken(algoAccount, assetName, 'TRPLC', {
             supply: 1,
             decimals: 0,
             url,
@@ -110,7 +114,9 @@ router.post('/places', jwtAuthorize, bodyParser(), async ctx => {
         tokenId,
         userId: ctx.state.jwt.sub,
         name: ctx.request.body.name,
-        offChainImageUrl: ctx.request.body.offChainImageUrl
+        offChainImageUrl: ctx.request.body.offChainImageUrl,
+        positionX: ctx.request.body.positionX,
+        positionY: ctx.request.body.positionY
     })
 
     ctx.body = { tokenId }
@@ -218,53 +224,59 @@ router.put('/projects/:contractId/approval', authHandler, bodyParser(), async ct
 })
 
 router.get('/places', async ctx => {
-    const projects = await new PlaceRepository().getPlaces({
+    const places = await new PlaceRepository().getPlaces({
         sort: ctx.request.query.sort,
         status: ctx.request.query.status,
         pageSize: ctx.request.query.pageSize,
         nextPageKey: ctx.request.query.nextPageKey
     })
-    ctx.body = projects
+    ctx.body = places
     ctx.status = 200
 })
 
-router.get('/projects/:contractId', async ctx => {
-    const infoObject = getContractFromJsonString(ctx.params.contractId)
-    const project = await new PlaceRepository().getPlace(ctx.params.contractId)
+router.get('/places/:tokenId', async ctx => {
+    const place = await new PlaceRepository().getPlace(ctx.params.tokenId)
+    const user = await new UserRepository().getUserById(place.userId)
 
-    let balance, tokenBalance, tokenId, creator, approved, tokenCreatorOptIn
-    try {
+    const algoIndexer = new AlgoIndexer()
+    let extraData
+
+    if (user.walletAddress) {
         const stdlib = new ReachProvider().getStdlib()
-        const algoAccount = await stdlib.createAccount()
+        const tokenCreatorOptIn = await isTokenAccepted(stdlib, user.walletAddress, ctx.params.tokenId)
 
-        const contract = algoAccount.contract(backend, infoObject)
-        const view = contract.v.View
+        const [assetResponse, balancesResponse] = await Promise.all([
+            algoIndexer.callAlgonodeIndexerEndpoint(`assets/${ctx.params.tokenId}`),
+            algoIndexer.callAlgonodeIndexerEndpoint(`assets/${ctx.params.tokenId}/balances`)
+        ])
 
-        // We need to read different view parameters sequentially
-        balance = (await view.balance())[1].toNumber()
-        tokenBalance = (await view.tokenBalance())[1].toNumber()
-        tokenId = (await view.token())[1].toNumber()
-        creator = stdlib.formatAddress((await view.creator())[1])
-        approved = (await view.approved())[1]
-        tokenCreatorOptIn = await isTokenAccepted(stdlib, creator, tokenId)
-    } catch (e) {
-        throw new ReadContractError(e)
+        if (!assetResponse || assetResponse.status !== 200 || assetResponse.json.asset.deleted || !balancesResponse || balancesResponse.status !== 200) {
+            throw new AssetNotFoundError()
+        }
+
+        const userWalletOwned = balancesResponse.json.balances.some(balance => balance.amount > 0 && !balance.deleted && balance.address === user.walletAddress)
+
+        extraData = {
+            name: assetResponse.json.asset.params.name,
+            url: assetResponse.json.asset.params.url,
+            reserve: assetResponse.json.asset.params.reserve,
+            tokenCreatorOptIn,
+            userWalletOwned
+        }
+    } else {
+        const assetResponse = await new AlgoIndexer().callAlgonodeIndexerEndpoint(`assets/${ctx.params.tokenId}`)
+        if (assetResponse.status !== 200 || assetResponse.json.asset.deleted) throw new AssetNotFoundError()
+
+        extraData = {
+            name: assetResponse.json.asset.params.name,
+            url: assetResponse.json.asset.params.url,
+            reserve: assetResponse.json.asset.params.reserve
+        }
     }
 
-    const indexerResponse = await new AlgoIndexer().callAlgonodeIndexerEndpoint(`assets/${tokenId}`)
-    if (indexerResponse.status !== 200 || indexerResponse.json.asset.deleted) throw new AssetNotFoundError()
-
     ctx.body = {
-        ...project,
-        balance,
-        tokenPaid: tokenBalance === 0,
-        approved,
-        tokenId,
-        creator,
-        tokenCreatorOptIn,
-        name: indexerResponse.json.asset.params.name,
-        url: indexerResponse.json.asset.params.url,
-        reserve: indexerResponse.json.asset.params.reserve
+        ...place,
+        ...extraData
     }
 })
 

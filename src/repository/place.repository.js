@@ -7,7 +7,7 @@ export default class PlaceRepository extends DynamoDbRepository {
     userPrefix = 'user'
     itemName = 'place'
 
-    async createPlace({ tokenId, userId, name, offChainImageUrl }) {
+    async createPlace({ tokenId, userId, name, positionX, positionY, offChainImageUrl }) {
         const now = Date.now()
 
         return await this.put({
@@ -15,8 +15,10 @@ export default class PlaceRepository extends DynamoDbRepository {
                 pk: { S: `${this.placePrefix}|${tokenId}` },
                 gsi1pk: { S: `${this.userPrefix}|${userId}` },
                 gsi2pk: { S: `type|${this.placePrefix}` },
-                data: { S: `${this.placePrefix}|new|${now}` },
+                data: { S: `${this.placePrefix}|created|${now}` },
                 created: { N: now.toString() },
+                positionX: { N: positionX.toString() },
+                positionY: { N: positionY.toString() },
                 name: { S: name },
                 offChainImageUrl: { S: offChainImageUrl }
             },
@@ -104,14 +106,14 @@ export default class PlaceRepository extends DynamoDbRepository {
         })
 
         return {
-            places: data.items.map(project => ({
-                id: project.pk.S.replace(`|`, ''),
-                status: project.data.S.split('|')[1],
-                creator: project.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
-                ...(project.name && { name: project.name.S }),
-                ...(project.created && { created: parseInt(project.created.N) }),
-                ...(project.archived && { archived: parseInt(project.archived.N) }),
-                ...(project.offChainImageUrl && { offChainImageUrl: project.offChainImageUrl.S })
+            places: data.items.map(place => ({
+                id: place.pk.S.replace(`${this.placePrefix}|`, ''),
+                status: place.data.S.split('|')[1],
+                userId: place.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
+                name: place.name.S,
+                offChainImageUrl: place.offChainImageUrl.S,
+                positionX: parseInt(place.positionX.N),
+                positionY: parseInt(place.positionY.N)
             })),
             ...(data.nextPageKey && { nextPageKey: data.nextPageKey })
         }
