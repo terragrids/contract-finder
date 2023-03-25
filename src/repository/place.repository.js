@@ -39,6 +39,8 @@ export default class PlaceRepository extends DynamoDbRepository {
                     userId: data.Item.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
                     name: data.Item.name.S,
                     status: data.Item.data.S.split('|')[1],
+                    positionX: parseInt(data.Item.positionX.N),
+                    positionY: parseInt(data.Item.positionY.N),
                     ...(data.Item.created && { created: parseInt(data.Item.created.N) }),
                     ...(data.Item.archived && { archived: parseInt(data.Item.archived.N) }),
                     ...(data.Item.offChainImageUrl && data.Item.offChainImageUrl.S && { offChainImageUrl: data.Item.offChainImageUrl.S })
