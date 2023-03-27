@@ -77,7 +77,7 @@ router.post('/places', jwtAuthorize, bodyParser(), async ctx => {
     if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
 
     const stdlib = new ReachProvider().getStdlib()
-    const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
+    const [algoAccount, user] = await Promise.all([stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
 
     /**
      * Mint place token
@@ -112,7 +112,7 @@ router.post('/places', jwtAuthorize, bodyParser(), async ctx => {
      */
     await new PlaceRepository().createPlace({
         tokenId,
-        userId: ctx.state.jwt.sub,
+        userId: user.id,
         name: ctx.request.body.name,
         offChainImageUrl: ctx.request.body.offChainImageUrl,
         positionX: ctx.request.body.positionX,

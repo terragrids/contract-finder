@@ -66,11 +66,13 @@ jest.mock('./repository/place.repository.js', () =>
 )
 
 const mockUserRepository = {
-    getUserById: jest.fn().mockImplementation(() => jest.fn())
+    getUserById: jest.fn().mockImplementation(() => jest.fn()),
+    getUserByOauthId: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/user.repository.js', () =>
     jest.fn().mockImplementation(() => ({
-        getUserById: mockUserRepository.getUserById
+        getUserById: mockUserRepository.getUserById,
+        getUserByOauthId: mockUserRepository.getUserByOauthId
     }))
 )
 
@@ -325,6 +327,10 @@ describe('app', function () {
                 networkAccount: { addr: 'wallet_address' }
             }))
 
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user_id'
+            }))
+
             const response = await request(app.callback()).post('/places').send({
                 name: 'place name',
                 cid: 'place cid',
@@ -346,7 +352,7 @@ describe('app', function () {
 
             expect(mockPlaceRepository.createPlace).toHaveBeenCalledTimes(1)
             expect(mockPlaceRepository.createPlace).toHaveBeenCalledWith({
-                userId: 'jwt_sub',
+                userId: 'user_id',
                 name: 'place name',
                 offChainImageUrl: 'image url',
                 tokenId: 1234,
@@ -372,6 +378,10 @@ describe('app', function () {
                 networkAccount: { addr: 'wallet_address' }
             }))
 
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user_id'
+            }))
+
             const response = await request(app.callback()).post('/places').send({
                 name: 'Louisville and Nashville Railroad Office Building',
                 cid: 'place cid',
@@ -394,7 +404,7 @@ describe('app', function () {
 
             expect(mockPlaceRepository.createPlace).toHaveBeenCalledTimes(1)
             expect(mockPlaceRepository.createPlace).toHaveBeenCalledWith({
-                userId: 'jwt_sub',
+                userId: 'user_id',
                 name: 'Louisville and Nashville Railroad Office Building',
                 offChainImageUrl: 'image url',
                 tokenId: 1234,
