@@ -280,15 +280,15 @@ router.get('/places/:tokenId', async ctx => {
     }
 })
 
-router.get('/creators/:creatorId/projects', async ctx => {
-    const projects = await new PlaceRepository().getProjectsByCreator({
-        creator: ctx.params.creatorId,
+router.get('/users/:userId/places', async ctx => {
+    const places = await new PlaceRepository().getPlacesByUser({
+        userId: ctx.params.userId,
         sort: ctx.request.query.sort,
         status: ctx.request.query.status,
         pageSize: ctx.request.query.pageSize,
         nextPageKey: ctx.request.query.nextPageKey
     })
-    ctx.body = projects
+    ctx.body = places
     ctx.status = 200
 })
 

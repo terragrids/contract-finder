@@ -121,19 +121,19 @@ export default class PlaceRepository extends DynamoDbRepository {
         }
     }
 
-    async getProjectsByCreator({ creator, pageSize, nextPageKey, sort, status }) {
+    async getPlacesByUser({ userId, pageSize, nextPageKey, sort, status }) {
         const forward = sort && sort === 'desc' ? false : true
-        let projectAttributeValue = `${this.itemName}|`
+        let placeAttributeValue = `${this.itemName}|`
         if (status) {
-            projectAttributeValue = `${projectAttributeValue}${status}`
+            placeAttributeValue = `${placeAttributeValue}${status}`
         }
         const data = await this.query({
             indexName: 'gsi1',
-            conditionExpression: 'gsi1pk = :gsi1pk AND begins_with(#data, :project)',
+            conditionExpression: 'gsi1pk = :gsi1pk AND begins_with(#data, :place)',
             attributeNames: { '#data': 'data' },
             attributeValues: {
-                ':gsi1pk': { S: `user|${creator}` },
-                ':project': { S: projectAttributeValue }
+                ':gsi1pk': { S: `user|${userId}` },
+                ':place': { S: placeAttributeValue }
             },
             pageSize,
             nextPageKey,
@@ -141,13 +141,13 @@ export default class PlaceRepository extends DynamoDbRepository {
         })
 
         return {
-            projects: data.items.map(project => ({
-                id: project.pk.S.replace('project|', ''),
-                status: project.data.S.split('|')[1],
-                ...(project.name && { name: project.name.S }),
-                ...(project.created && { created: parseInt(project.created.N) }),
-                ...(project.archived && { archived: parseInt(project.archived.N) }),
-                ...(project.offChainImageUrl && { offChainImageUrl: project.offChainImageUrl.S })
+            places: data.items.map(place => ({
+                id: place.pk.S.replace(`${this.placePrefix}|`, ''),
+                status: place.data.S.split('|')[1],
+                ...(place.name && { name: place.name.S }),
+                ...(place.created && { created: parseInt(place.created.N) }),
+                ...(place.archived && { archived: parseInt(place.archived.N) }),
+                ...(place.offChainImageUrl && { offChainImageUrl: place.offChainImageUrl.S })
             })),
             ...(data.nextPageKey && { nextPageKey: data.nextPageKey })
         }

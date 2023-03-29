@@ -49,7 +49,7 @@ const mockPlaceRepository = {
     updatePlace: jest.fn().mockImplementation(() => jest.fn()),
     getPlace: jest.fn().mockImplementation(() => jest.fn()),
     getPlaces: jest.fn().mockImplementation(() => jest.fn()),
-    getProjectsByCreator: jest.fn().mockImplementation(() => jest.fn()),
+    getPlacesByUser: jest.fn().mockImplementation(() => jest.fn()),
     deleteProject: jest.fn().mockImplementation(() => jest.fn()),
     setProjectApproval: jest.fn().mockImplementation(() => jest.fn())
 }
@@ -59,7 +59,7 @@ jest.mock('./repository/place.repository.js', () =>
         updatePlace: mockPlaceRepository.updatePlace,
         getPlace: mockPlaceRepository.getPlace,
         getPlaces: mockPlaceRepository.getPlaces,
-        getProjectsByCreator: mockPlaceRepository.getProjectsByCreator,
+        getPlacesByUser: mockPlaceRepository.getPlacesByUser,
         deleteProject: mockPlaceRepository.deleteProject,
         setProjectApproval: mockPlaceRepository.setProjectApproval
     }))
@@ -110,7 +110,7 @@ describe('app', function () {
     beforeEach(() => {
         jest.clearAllMocks()
         authHandler.mockImplementation(async (ctx, next) => {
-            ctx.state.account = 'place creator'
+            ctx.state.account = 'place user'
             await next()
         })
         process.env = { ...OLD_ENV } // make a copy
@@ -385,7 +385,7 @@ describe('app', function () {
             const response = await request(app.callback()).post('/places').send({
                 name: 'Louisville and Nashville Railroad Office Building',
                 cid: 'place cid',
-                creator: 'place creator',
+                creator: 'place user',
                 offChainImageUrl: 'image url',
                 positionX: 3,
                 positionY: 0
@@ -635,7 +635,7 @@ describe('app', function () {
 
             mockPlaceRepository.getPlace.mockImplementation(() => ({
                 id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
-                creator: 'place creator'
+                creator: 'place user'
             }))
 
             const view = {
@@ -720,7 +720,7 @@ describe('app', function () {
 
             mockPlaceRepository.getPlace.mockImplementation(() => ({
                 id: contractId,
-                creator: 'place creator'
+                creator: 'place user'
             }))
 
             const view = {
@@ -804,7 +804,7 @@ describe('app', function () {
 
             mockPlaceRepository.getPlace.mockImplementation(() => ({
                 id: contractId,
-                creator: 'place creator'
+                creator: 'place user'
             }))
 
             const response = await request(app.callback()).put(`/places/${contractId}`).send({
@@ -931,7 +931,7 @@ describe('app', function () {
 
             mockPlaceRepository.getPlace.mockImplementation(() => ({
                 id: contractId,
-                creator: 'place creator'
+                creator: 'place user'
             }))
 
             const view = {
@@ -968,7 +968,7 @@ describe('app', function () {
 
             mockPlaceRepository.getPlace.mockImplementation(() => ({
                 id: contractId,
-                creator: 'place creator'
+                creator: 'place user'
             }))
 
             const view = {
@@ -1739,26 +1739,26 @@ describe('app', function () {
         })
     })
 
-    describe('get projects by creator endpoint', function () {
+    describe('get projects by user endpoint', function () {
         it('should return 200 when getting projects and all is fine', async () => {
-            mockPlaceRepository.getProjectsByCreator.mockImplementation(() => ({
-                projects: [
+            mockPlaceRepository.getPlacesByUser.mockImplementation(() => ({
+                places: [
                     {
-                        id: 'contract-id-1',
-                        created: 'contract-date-1'
+                        id: 'token-id-1',
+                        created: 'token-date-1'
                     },
                     {
-                        id: 'contract-id-2',
-                        created: 'contract-date-2'
+                        id: 'token-id-2',
+                        created: 'token-date-2'
                     }
                 ]
             }))
 
-            const response = await request(app.callback()).get('/creators/creator-id/projects?sort=asc&status=approved&pageSize=12&nextPageKey=page-key')
+            const response = await request(app.callback()).get('/users/user-id/places?sort=asc&status=approved&pageSize=12&nextPageKey=page-key')
 
-            expect(mockPlaceRepository.getProjectsByCreator).toHaveBeenCalledTimes(1)
-            expect(mockPlaceRepository.getProjectsByCreator).toHaveBeenCalledWith({
-                creator: 'creator-id',
+            expect(mockPlaceRepository.getPlacesByUser).toHaveBeenCalledTimes(1)
+            expect(mockPlaceRepository.getPlacesByUser).toHaveBeenCalledWith({
+                userId: 'user-id',
                 sort: 'asc',
                 status: 'approved',
                 nextPageKey: 'page-key',
@@ -1767,14 +1767,14 @@ describe('app', function () {
 
             expect(response.status).toBe(200)
             expect(response.body).toEqual({
-                projects: [
+                places: [
                     {
-                        id: 'contract-id-1',
-                        created: 'contract-date-1'
+                        id: 'token-id-1',
+                        created: 'token-date-1'
                     },
                     {
-                        id: 'contract-id-2',
-                        created: 'contract-date-2'
+                        id: 'token-id-2',
+                        created: 'token-date-2'
                     }
                 ]
             })
