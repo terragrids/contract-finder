@@ -1,6 +1,6 @@
 import GenericError from './generic-error.js'
 
-export default class UpdateContractError extends GenericError {
+export default class UpdatePlaceTokenError extends GenericError {
     httpCode = 500
     error
 
@@ -11,8 +11,8 @@ export default class UpdateContractError extends GenericError {
 
     toJson() {
         return {
-            error: 'UpdateContractError',
-            message: 'Unable to update place contract'
+            error: 'UpdatePlaceTokenError',
+            message: 'Unable to update place token'
         }
     }
 }

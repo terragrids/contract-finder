@@ -13,7 +13,7 @@ import MissingParameterError from './error/missing-parameter.error.js'
 import ParameterTooLongError from './error/parameter-too-long.error.js'
 import DynamoDbRepository from './repository/dynamodb.repository.js'
 import PlaceRepository from './repository/place.repository.js'
-import UpdateContractError from './error/update-contract.error.js'
+import UpdatePlaceTokenError from './error/update-contract.error.js'
 import authHandler from './middleware/auth-handler.js'
 import { UserUnauthorizedError } from './error/user-unauthorized-error.js'
 import MintTokenError from './error/mint-token.error.js'
@@ -108,7 +108,7 @@ router.post('/places', jwtAuthorize, bodyParser(), async ctx => {
     }
 
     /**
-     * Save place offchain
+     * Save place off-chain
      */
     await new PlaceRepository().createPlace({
         tokenId,
@@ -123,7 +123,7 @@ router.post('/places', jwtAuthorize, bodyParser(), async ctx => {
     ctx.status = 201
 })
 
-router.put('/places/:contractId', authHandler, bodyParser(), async ctx => {
+router.put('/places/:tokenId', jwtAuthorize, bodyParser(), async ctx => {
     if (!ctx.request.body.name) throw new MissingParameterError('name')
     if (!ctx.request.body.cid) throw new MissingParameterError('cid')
     if (!ctx.request.body.offChainImageUrl) throw new MissingParameterError('offChainImageUrl')
@@ -131,22 +131,16 @@ router.put('/places/:contractId', authHandler, bodyParser(), async ctx => {
     if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
     if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
 
-    const infoObject = getContractFromJsonString(ctx.params.contractId)
+    const userRepository = new UserRepository()
+    const placeRepository = new PlaceRepository()
+    const [user, place] = await Promise.all([userRepository.getUserByOauthId(ctx.state.jwt.sub), placeRepository.getPlace(ctx.params.tokenId)])
 
-    const repository = new PlaceRepository()
-    const place = await repository.getPlace(ctx.params.contractId)
-
-    // Admins or creators can update place details
-    if (ctx.state.account !== place.creator && !isAdminWallet(ctx.state.account)) throw new UserUnauthorizedError()
+    // Only creators can update place details. TODO: add admins
+    if (user.id !== place.userId) throw new UserUnauthorizedError()
 
     try {
         const stdlib = new ReachProvider().getStdlib()
         const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
-
-        const contract = algoAccount.contract(backend, infoObject)
-
-        const view = contract.v.View
-        const tokenId = (await view.token())[1].toNumber()
 
         const cid = ctx.request.body.cid
         const { address } = algorandAddressFromCID(stdlib.algosdk, cid)
@@ -159,7 +153,7 @@ router.put('/places/:contractId', authHandler, bodyParser(), async ctx => {
 
         // The change has to come from the existing manager
         const transaction = stdlib.algosdk.makeAssetConfigTxnWithSuggestedParamsFromObject({
-            assetIndex: tokenId,
+            assetIndex: parseInt(place.id),
             from: managerAddress,
             manager: managerAddress,
             freeze: managerAddress,
@@ -174,16 +168,15 @@ router.put('/places/:contractId', authHandler, bodyParser(), async ctx => {
         let txnResponse = await algoClient.sendRawTransaction(rawSignedTxn).do()
         await stdlib.algosdk.waitForConfirmation(algoClient, txnResponse.txId, 4)
 
-        await repository.updatePlace({
-            contractId: ctx.params.contractId,
+        await placeRepository.updatePlace({
+            tokenId: place.id,
             name: ctx.request.body.name,
-            cid: ctx.request.body.cid,
             offChainImageUrl: ctx.request.body.offChainImageUrl
         })
 
         ctx.status = 204
     } catch (e) {
-        throw new UpdateContractError(e)
+        throw new UpdatePlaceTokenError(e)
     }
 })
 
@@ -219,7 +212,7 @@ router.put('/projects/:contractId/approval', authHandler, bodyParser(), async ct
 
         ctx.status = 204
     } catch (e) {
-        throw new UpdateContractError(e)
+        throw new UpdatePlaceTokenError(e)
     }
 })
 

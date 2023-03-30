@@ -631,24 +631,19 @@ describe('app', function () {
 
     describe('update place endpoint', function () {
         it('should return 204 when updating all place properties and all is fine', async () => {
-            const tokenId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            const tokenId = '1234'
 
-            mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9',
-                creator: 'place user'
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user-id'
             }))
 
-            const view = {
-                View: {
-                    token: () => [0, { toNumber: () => 'place token id' }]
-                }
-            }
+            mockPlaceRepository.getPlace.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id'
+            }))
 
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
-                contract: () => ({
-                    v: view
-                })
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' }
             }))
 
             algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
@@ -675,12 +670,15 @@ describe('app', function () {
                 offChainImageUrl: 'off-chain url'
             })
 
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledWith('jwt_sub')
+
             expect(mockPlaceRepository.getPlace).toHaveBeenCalledTimes(1)
             expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(tokenId)
 
             expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledTimes(1)
             expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledWith({
-                assetIndex: 'place token id',
+                assetIndex: 1234,
                 clawback: 'wallet_address',
                 freeze: 'wallet_address',
                 from: 'wallet_address',
@@ -699,93 +697,7 @@ describe('app', function () {
 
             expect(mockPlaceRepository.updatePlace).toHaveBeenCalledTimes(1)
             expect(mockPlaceRepository.updatePlace).toHaveBeenCalledWith({
-                contractId: tokenId,
-                cid: 'place cid',
-                name: 'place name',
-                offChainImageUrl: 'off-chain url'
-            })
-
-            expect(response.status).toBe(204)
-            expect(response.body).toEqual({})
-        })
-
-        it('should return 204 when updating all place properties and user is admin', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-
-            process.env.ADMIN_WALLETS = 'admin_wallet,super_wallet'
-            authHandler.mockImplementation(async (ctx, next) => {
-                ctx.state.account = 'admin_wallet'
-                await next()
-            })
-
-            mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: contractId,
-                creator: 'place user'
-            }))
-
-            const view = {
-                View: {
-                    token: () => [0, { toNumber: () => 'place token id' }]
-                }
-            }
-
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
-                contract: () => ({
-                    v: view
-                })
-            }))
-
-            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
-            cidFromAlgorandAddress.mockImplementation(() => 'place cid')
-
-            mockStdlib.getProvider.mockImplementation(() =>
-                Promise.resolve({
-                    algodClient: {
-                        getTransactionParams: () => ({ do: async () => Promise.resolve({ param: 'txn_param' }) }),
-                        sendRawTransaction: () => ({ do: async () => Promise.resolve({ txId: 'txn_id' }) })
-                    }
-                })
-            )
-
-            const mockSignedTnx = jest.fn().mockImplementation(() => 'signed_txn')
-
-            mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject.mockImplementation(() => ({
-                signTxn: mockSignedTnx
-            }))
-
-            const response = await request(app.callback()).put(`/places/${contractId}`).send({
-                name: 'place name',
-                cid: 'place cid',
-                offChainImageUrl: 'off-chain url'
-            })
-
-            expect(mockPlaceRepository.getPlace).toHaveBeenCalledTimes(1)
-            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(contractId)
-
-            expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledTimes(1)
-            expect(mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject).toHaveBeenCalledWith({
-                assetIndex: 'place token id',
-                clawback: 'wallet_address',
-                freeze: 'wallet_address',
-                from: 'wallet_address',
-                manager: 'wallet_address',
-                reserve: 'reserve_address',
-                suggestedParams: {
-                    param: 'txn_param'
-                }
-            })
-
-            expect(mockSignedTnx).toHaveBeenCalledTimes(1)
-            expect(mockSignedTnx).toHaveBeenCalledWith('account_sk')
-
-            expect(mockStdlib.waitForConfirmation).toHaveBeenCalledTimes(1)
-            expect(mockStdlib.waitForConfirmation).toHaveBeenCalledWith(expect.any(Object), 'txn_id', 4)
-
-            expect(mockPlaceRepository.updatePlace).toHaveBeenCalledTimes(1)
-            expect(mockPlaceRepository.updatePlace).toHaveBeenCalledWith({
-                contractId,
-                cid: 'place cid',
+                tokenId: tokenId,
                 name: 'place name',
                 offChainImageUrl: 'off-chain url'
             })
@@ -795,26 +707,28 @@ describe('app', function () {
         })
 
         it('should return 403 when updating place with unauthorized user', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            const tokenId = '1234'
 
-            authHandler.mockImplementation(async (ctx, next) => {
-                ctx.state.account = 'bogus user'
-                await next()
-            })
-
-            mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: contractId,
-                creator: 'place user'
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user-id-1'
             }))
 
-            const response = await request(app.callback()).put(`/places/${contractId}`).send({
+            mockPlaceRepository.getPlace.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id'
+            }))
+
+            const response = await request(app.callback()).put(`/places/${tokenId}`).send({
                 name: 'place name',
                 cid: 'place cid',
                 offChainImageUrl: 'off-chain url'
             })
 
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledWith('jwt_sub')
+
             expect(mockPlaceRepository.getPlace).toHaveBeenCalledTimes(1)
-            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(contractId)
+            expect(mockPlaceRepository.getPlace).toHaveBeenCalledWith(tokenId)
 
             expect(mockPlaceRepository.updatePlace).not.toHaveBeenCalled()
 
@@ -826,11 +740,7 @@ describe('app', function () {
         })
 
         it('should return 400 when updating url place property without cid', async () => {
-            mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-            }))
-
-            const response = await request(app.callback()).put('/places/contract-id').send({
+            const response = await request(app.callback()).put('/places/1234').send({
                 name: 'place name',
                 offChainImageUrl: 'off-chain url'
             })
@@ -845,11 +755,7 @@ describe('app', function () {
         })
 
         it('should return 400 when updating url place property without off-chain url', async () => {
-            mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-            }))
-
-            const response = await request(app.callback()).put('/places/contract-id').send({
+            const response = await request(app.callback()).put('/places/1234').send({
                 name: 'place name',
                 cid: 'place cid'
             })
@@ -864,10 +770,6 @@ describe('app', function () {
         })
 
         it('should return 400 when updating url place property without name', async () => {
-            mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-            }))
-
             const response = await request(app.callback()).put('/places/contract-id').send({
                 cid: 'place cid',
                 offChainImageUrl: 'off-chain url'
@@ -883,10 +785,6 @@ describe('app', function () {
         })
 
         it('should return 400 when updating too long name place property', async () => {
-            mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-            }))
-
             const response = await request(app.callback())
                 .put('/places/contract-id')
                 .send({
@@ -905,10 +803,6 @@ describe('app', function () {
         })
 
         it('should return 400 when updating too long off-chain url place property', async () => {
-            mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-            }))
-
             const response = await request(app.callback())
                 .put('/places/contract-id')
                 .send({
@@ -927,30 +821,25 @@ describe('app', function () {
         })
 
         it('should return 500 when cid verification fails', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            const tokenId = '1234'
 
-            mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: contractId,
-                creator: 'place user'
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user-id'
             }))
 
-            const view = {
-                View: {
-                    token: () => [0, { toNumber: () => 'place token id' }]
-                }
-            }
+            mockPlaceRepository.getPlace.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id'
+            }))
 
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
-                contract: () => ({
-                    v: view
-                })
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' }
             }))
 
             algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
             cidFromAlgorandAddress.mockImplementation(() => 'place meh')
 
-            const response = await request(app.callback()).put(`/places/${contractId}`).send({
+            const response = await request(app.callback()).put(`/places/${tokenId}`).send({
                 name: 'place name',
                 cid: 'place cid',
                 offChainImageUrl: 'off-chain url'
@@ -958,30 +847,25 @@ describe('app', function () {
 
             expect(response.status).toBe(500)
             expect(response.body).toEqual({
-                error: 'UpdateContractError',
-                message: 'Unable to update place contract'
+                error: 'UpdatePlaceTokenError',
+                message: 'Unable to update place token'
             })
         })
 
         it('should return 500 when asset config transaction fails', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
+            const tokenId = '124'
 
-            mockPlaceRepository.getPlace.mockImplementation(() => ({
-                id: contractId,
-                creator: 'place user'
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user-id'
             }))
 
-            const view = {
-                View: {
-                    token: () => [0, { toNumber: () => 'place token id' }]
-                }
-            }
+            mockPlaceRepository.getPlace.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id'
+            }))
 
             mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
-                contract: () => ({
-                    v: view
-                })
+                networkAccount: { addr: 'wallet_address', sk: 'account_sk' }
             }))
 
             algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
@@ -1002,7 +886,7 @@ describe('app', function () {
                 throw new Error()
             })
 
-            const response = await request(app.callback()).put(`/places/${contractId}`).send({
+            const response = await request(app.callback()).put(`/places/${tokenId}`).send({
                 name: 'place name',
                 cid: 'place cid',
                 offChainImageUrl: 'off-chain url'
@@ -1010,8 +894,8 @@ describe('app', function () {
 
             expect(response.status).toBe(500)
             expect(response.body).toEqual({
-                error: 'UpdateContractError',
-                message: 'Unable to update place contract'
+                error: 'UpdatePlaceTokenError',
+                message: 'Unable to update place token'
             })
         })
     })
@@ -1272,8 +1156,8 @@ describe('app', function () {
 
             expect(response.status).toBe(500)
             expect(response.body).toEqual({
-                error: 'UpdateContractError',
-                message: 'Unable to update place contract'
+                error: 'UpdatePlaceTokenError',
+                message: 'Unable to update place token'
             })
         })
     })
