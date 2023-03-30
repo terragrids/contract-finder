@@ -250,7 +250,6 @@ router.get('/places/:tokenId', async ctx => {
         const userWalletOwned = balancesResponse.json.balances.some(balance => balance.amount > 0 && !balance.deleted && balance.address === user.walletAddress)
 
         extraData = {
-            name: assetResponse.json.asset.params.name,
             url: assetResponse.json.asset.params.url,
             reserve: assetResponse.json.asset.params.reserve,
             tokenCreatorOptIn,
@@ -261,7 +260,6 @@ router.get('/places/:tokenId', async ctx => {
         if (assetResponse.status !== 200 || assetResponse.json.asset.deleted) throw new AssetNotFoundError()
 
         extraData = {
-            name: assetResponse.json.asset.params.name,
             url: assetResponse.json.asset.params.url,
             reserve: assetResponse.json.asset.params.reserve
         }

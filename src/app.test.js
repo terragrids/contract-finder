@@ -1169,7 +1169,8 @@ describe('app', function () {
             mockPlaceRepository.getPlace.mockImplementation(() => ({
                 id: tokenId,
                 userId: 'user-id',
-                created: 'creation-date'
+                created: 'creation-date',
+                name: 'place name'
             }))
 
             mockUserRepository.getUserById.mockImplementation(() => ({
@@ -1192,7 +1193,7 @@ describe('app', function () {
                                 asset: {
                                     index: tokenId,
                                     params: {
-                                        name: 'place name',
+                                        name: 'token name',
                                         total: 1,
                                         decimals: 0,
                                         'unit-name': 'TRPLC',
@@ -1245,7 +1246,8 @@ describe('app', function () {
             mockPlaceRepository.getPlace.mockImplementation(() => ({
                 id: tokenId,
                 userId: 'user-id',
-                created: 'creation-date'
+                created: 'creation-date',
+                name: 'place name'
             }))
 
             mockUserRepository.getUserById.mockImplementation(() => ({
@@ -1268,7 +1270,7 @@ describe('app', function () {
                                 asset: {
                                     index: tokenId,
                                     params: {
-                                        name: 'place name',
+                                        name: 'token name',
                                         total: 1,
                                         decimals: 0,
                                         'unit-name': 'TRPLC',
@@ -1321,7 +1323,8 @@ describe('app', function () {
             mockPlaceRepository.getPlace.mockImplementation(() => ({
                 id: tokenId,
                 userId: 'user-id',
-                created: 'creation-date'
+                created: 'creation-date',
+                name: 'place name'
             }))
 
             mockUserRepository.getUserById.mockImplementation(() => ({
@@ -1344,7 +1347,7 @@ describe('app', function () {
                                 asset: {
                                     index: tokenId,
                                     params: {
-                                        name: 'place name',
+                                        name: 'token name',
                                         total: 1,
                                         decimals: 0,
                                         'unit-name': 'TRPLC',
@@ -1454,7 +1457,8 @@ describe('app', function () {
             mockPlaceRepository.getPlace.mockImplementation(() => ({
                 id: tokenId,
                 userId: 'user-id',
-                created: 'creation-date'
+                created: 'creation-date',
+                name: 'place name'
             }))
 
             mockUserRepository.getUserById.mockImplementation(() => ({
@@ -1468,7 +1472,7 @@ describe('app', function () {
                         asset: {
                             index: 123,
                             params: {
-                                name: 'place name',
+                                name: 'token name',
                                 total: 1,
                                 decimals: 0,
                                 'unit-name': 'TRPLC',
