@@ -289,27 +289,4 @@ router.get('/users/:userId/places', async ctx => {
     ctx.status = 200
 })
 
-router.delete('/projects/:contractId', authHandler, async ctx => {
-    if (!isAdminWallet(ctx.state.account)) throw new UserUnauthorizedError()
-
-    const infoObject = getContractFromJsonString(ctx.params.contractId)
-    await new PlaceRepository().deleteProject(ctx.params.contractId, ctx.request.query.permanent === 'true')
-
-    const stdlib = new ReachProvider().getStdlib()
-    const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
-
-    let contractDeleted
-    try {
-        const contract = algoAccount.contract(backend, infoObject)
-        const api = contract.a.Api
-        await api.stop()
-        contractDeleted = true
-    } catch (e) {
-        contractDeleted = false
-    }
-
-    ctx.body = { contractDeleted }
-    ctx.status = 200
-})
-
 app.use(requestLogger).use(errorHandler).use(router.routes()).use(router.allowedMethods())
