@@ -14,7 +14,8 @@ export default class UserRepository extends DynamoDbRepository {
             return item
                 ? {
                       id: item.gsi1pk.S.replace('user|id|', ''),
-                      ...(item.walletAddress && { walletAddress: item.walletAddress.S })
+                      ...(item.walletAddress && { walletAddress: item.walletAddress.S }),
+                      permissions: item.permissions.NS.map(p => parseInt(p)).filter(p => p !== -1)
                   }
                 : null
         } catch (e) {

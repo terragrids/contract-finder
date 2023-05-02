@@ -50,6 +50,7 @@ const mockPlaceRepository = {
     getPlace: jest.fn().mockImplementation(() => jest.fn()),
     getPlaces: jest.fn().mockImplementation(() => jest.fn()),
     getPlacesByUser: jest.fn().mockImplementation(() => jest.fn()),
+    deletePlace: jest.fn().mockImplementation(() => jest.fn()),
     deleteProject: jest.fn().mockImplementation(() => jest.fn()),
     setProjectApproval: jest.fn().mockImplementation(() => jest.fn())
 }
@@ -60,6 +61,7 @@ jest.mock('./repository/place.repository.js', () =>
         getPlace: mockPlaceRepository.getPlace,
         getPlaces: mockPlaceRepository.getPlaces,
         getPlacesByUser: mockPlaceRepository.getPlacesByUser,
+        deletePlace: mockPlaceRepository.deletePlace,
         deleteProject: mockPlaceRepository.deleteProject,
         setProjectApproval: mockPlaceRepository.setProjectApproval
     }))
@@ -1666,6 +1668,22 @@ describe('app', function () {
                     }
                 ]
             })
+        })
+    })
+
+    describe('delete place endpoint', function () {
+        it('should return 204 when deleting place', async () => {
+            const tokenId = 'token-id'
+
+            mockPlaceRepository.deletePlace.mockImplementation(() => Promise.resolve())
+
+            const response = await request(app.callback()).delete(`/places/${tokenId}`)
+
+            expect(mockPlaceRepository.deletePlace).toHaveBeenCalledTimes(1)
+            expect(mockPlaceRepository.deletePlace).toHaveBeenCalledWith('jwt_sub', tokenId)
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
         })
     })
 

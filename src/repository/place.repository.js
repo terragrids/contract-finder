@@ -1,6 +1,6 @@
 import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb'
 import PlaceNotFoundError from '../error/place-not-found.error.js'
-import DynamoDbRepository from './dynamodb.repository.js'
+import DynamoDbRepository, { PERMISSION_DELETE_PLACE } from './dynamodb.repository.js'
 
 export default class PlaceRepository extends DynamoDbRepository {
     placePrefix = 'place'
@@ -62,6 +62,24 @@ export default class PlaceRepository extends DynamoDbRepository {
                     ...(name && { '#name': { S: name } }),
                     ...(offChainImageUrl && { offChainImageUrl: { S: offChainImageUrl } })
                 },
+                itemLogName: this.itemName
+            })
+        } catch (e) {
+            if (e instanceof ConditionalCheckFailedException) throw new PlaceNotFoundError()
+            else throw e
+        }
+    }
+
+    async deletePlace(userId, tokenId) {
+        const now = Date.now()
+        try {
+            await this.update({
+                key: { pk: { S: `${this.placePrefix}|${tokenId}` } },
+                attributes: {
+                    '#data': { S: `${this.placePrefix}|archived|${now}` }
+                },
+                permissions: [PERMISSION_DELETE_PLACE],
+                userId,
                 itemLogName: this.itemName
             })
         } catch (e) {

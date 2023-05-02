@@ -1,6 +1,21 @@
-import { ConditionalCheckFailedException, DeleteItemCommand, DescribeTableCommand, DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb'
+import {
+    ConditionalCheckFailedException,
+    DeleteItemCommand,
+    DescribeTableCommand,
+    DynamoDBClient,
+    GetItemCommand,
+    PutItemCommand,
+    QueryCommand,
+    TransactWriteItemsCommand,
+    TransactionCanceledException,
+    UpdateItemCommand
+} from '@aws-sdk/client-dynamodb'
 import RepositoryError from '../error/repository.error.js'
 import Logger from '../logging/logger.js'
+import { UserUnauthorizedError } from '../error/user-unauthorized-error.js'
+
+export const PERMISSION_ALL = '0'
+export const PERMISSION_DELETE_PLACE = '1'
 
 export default class DynamoDbRepository {
     client
@@ -45,7 +60,7 @@ export default class DynamoDbRepository {
         }
     }
 
-    async update({ key, attributes, itemLogName = 'item' }) {
+    async update({ key, attributes, itemLogName = 'item', userId, permissions }) {
         const updateExpressionList = []
         const attributeValues = {}
         let attributeNames
@@ -69,7 +84,7 @@ export default class DynamoDbRepository {
 
         const updateExpression = updateExpressionList.length > 0 ? `set ${updateExpressionList.join(',')}` : null
 
-        const params = {
+        const updateParams = {
             TableName: this.table,
             Key: key,
             UpdateExpression: updateExpression,
@@ -78,13 +93,34 @@ export default class DynamoDbRepository {
             ConditionExpression: 'attribute_exists(pk)'
         }
 
-        const command = new UpdateItemCommand(params)
+        if (permissions && userId) {
+            const transactParams = {
+                TransactItems: [
+                    this.checkPermissions(userId, [PERMISSION_DELETE_PLACE]),
+                    {
+                        Update: updateParams
+                    }
+                ]
+            }
 
-        try {
-            return await this.client.send(command)
-        } catch (e) {
-            if (e instanceof ConditionalCheckFailedException) throw e
-            throw new RepositoryError(e, `Unable to update ${itemLogName}`)
+            const command = new TransactWriteItemsCommand(transactParams)
+
+            try {
+                return await this.client.send(command)
+            } catch (e) {
+                if (e instanceof ConditionalCheckFailedException) throw e
+                if (e instanceof TransactionCanceledException && e.CancellationReasons && e.CancellationReasons.some(r => r.Code === 'ConditionalCheckFailed')) throw new UserUnauthorizedError()
+                throw new RepositoryError(e, `Unable to update ${itemLogName}`)
+            }
+        } else {
+            const command = new UpdateItemCommand(updateParams)
+
+            try {
+                return await this.client.send(command)
+            } catch (e) {
+                if (e instanceof ConditionalCheckFailedException) throw e
+                throw new RepositoryError(e, `Unable to update ${itemLogName}`)
+            }
         }
     }
 
@@ -141,6 +177,31 @@ export default class DynamoDbRepository {
         } catch (e) {
             if (e instanceof ConditionalCheckFailedException) throw e
             else throw new RepositoryError(e, `Unable to delete ${itemLogName}`)
+        }
+    }
+
+    checkPermissions(userId, permissions) {
+        const conditionExpressionItems = []
+        const expressionAttributeValues = {}
+
+        for (const permission of permissions) {
+            conditionExpressionItems.push(`contains(#permissions, :p_${permission})`)
+            expressionAttributeValues[`:p_${permission}`] = { N: permission }
+        }
+
+        expressionAttributeValues[':all'] = { N: PERMISSION_ALL }
+        const conditionExpression = `(${conditionExpressionItems.join(' AND ')}) OR contains(#permissions, :all)`
+
+        return {
+            ConditionCheck: {
+                TableName: this.table,
+                Key: { pk: { S: `user|oauth|${userId}` } },
+                ConditionExpression: conditionExpression,
+                ExpressionAttributeNames: {
+                    '#permissions': 'permissions'
+                },
+                ExpressionAttributeValues: expressionAttributeValues
+            }
         }
     }
 }

@@ -271,6 +271,12 @@ router.get('/places/:tokenId', async ctx => {
     }
 })
 
+router.delete('/places/:tokenId', jwtAuthorize, async ctx => {
+    await new PlaceRepository().deletePlace(ctx.state.jwt.sub, ctx.params.tokenId)
+    ctx.body = ''
+    ctx.status = 204
+})
+
 router.get('/users/:userId/places', async ctx => {
     const places = await new PlaceRepository().getPlacesByUser({
         userId: ctx.params.userId,

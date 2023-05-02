@@ -12,6 +12,7 @@
         "algorand",
         "algosdk",
         "bodyparser",
+        "ipfs",
         "terragrids",
         "TRPLC",
         "TRPRJ"
