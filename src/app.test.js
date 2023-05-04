@@ -51,8 +51,7 @@ const mockPlaceRepository = {
     getPlaces: jest.fn().mockImplementation(() => jest.fn()),
     getPlacesByUser: jest.fn().mockImplementation(() => jest.fn()),
     deletePlace: jest.fn().mockImplementation(() => jest.fn()),
-    deleteProject: jest.fn().mockImplementation(() => jest.fn()),
-    setProjectApproval: jest.fn().mockImplementation(() => jest.fn())
+    approvePlace: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/place.repository.js', () =>
     jest.fn().mockImplementation(() => ({
@@ -62,8 +61,7 @@ jest.mock('./repository/place.repository.js', () =>
         getPlaces: mockPlaceRepository.getPlaces,
         getPlacesByUser: mockPlaceRepository.getPlacesByUser,
         deletePlace: mockPlaceRepository.deletePlace,
-        deleteProject: mockPlaceRepository.deleteProject,
-        setProjectApproval: mockPlaceRepository.setProjectApproval
+        approvePlace: mockPlaceRepository.approvePlace
     }))
 )
 
@@ -77,11 +75,6 @@ jest.mock('./repository/user.repository.js', () =>
         getUserByOauthId: mockUserRepository.getUserByOauthId
     }))
 )
-
-jest.mock('../reach/project-contract/build/index.main.mjs', () => jest.fn().mockImplementation(() => ({})))
-
-import authHandler from './middleware/auth-handler.js'
-jest.mock('./middleware/auth-handler.js')
 
 jest.mock('./middleware/jwt-authorize.js', () =>
     jest.fn().mockImplementation(async (ctx, next) => {
@@ -111,10 +104,6 @@ describe('app', function () {
 
     beforeEach(() => {
         jest.clearAllMocks()
-        authHandler.mockImplementation(async (ctx, next) => {
-            ctx.state.account = 'place user'
-            await next()
-        })
         process.env = { ...OLD_ENV } // make a copy
     })
 
@@ -902,268 +891,6 @@ describe('app', function () {
         })
     })
 
-    describe('approve project endpoint', function () {
-        beforeEach(() => {
-            mockStdlib.formatAddress.mockImplementation(address => `formatted ${address}`)
-
-            process.env.ADMIN_WALLETS = 'admin_wallet,super_wallet'
-            authHandler.mockImplementation(async (ctx, next) => {
-                ctx.state.account = 'admin_wallet'
-                await next()
-            })
-        })
-
-        it('should return 204 when approving project and creator accepts token', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-
-            const api = {
-                Api: {
-                    payToken: jest.fn().mockImplementation(() => Promise.resolve()),
-                    setApprovalState: jest.fn().mockImplementation(() => Promise.resolve())
-                }
-            }
-
-            const view = {
-                View: {
-                    creator: () => [0, 'project_creator'],
-                    token: () => [0, { toNumber: () => 'project_token_id' }]
-                }
-            }
-
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
-                contract: () => ({
-                    a: api,
-                    v: view
-                })
-            }))
-
-            mockStdlib.tokensAccepted.mockImplementation(() => [
-                {
-                    toNumber: () => 'project_token_id'
-                }
-            ])
-
-            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({
-                approved: true
-            })
-
-            expect(mockStdlib.tokensAccepted).toHaveBeenCalledTimes(1)
-            expect(mockStdlib.tokensAccepted).toHaveBeenCalledWith('formatted project_creator')
-
-            expect(api.Api.payToken).toHaveBeenCalledTimes(1)
-
-            expect(mockPlaceRepository.setProjectApproval).toHaveBeenCalledTimes(1)
-            expect(mockPlaceRepository.setProjectApproval).toHaveBeenCalledWith(contractId, true)
-
-            expect(response.status).toBe(204)
-            expect(response.body).toEqual({})
-        })
-
-        it('should return 204 when approving project and creator do not accept token', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-
-            const api = {
-                Api: {
-                    payToken: jest.fn().mockImplementation(() => Promise.resolve()),
-                    setApprovalState: jest.fn().mockImplementation(() => Promise.resolve())
-                }
-            }
-
-            const view = {
-                View: {
-                    creator: () => [0, 'project_creator'],
-                    token: () => [0, { toNumber: () => 'project_token_id' }]
-                }
-            }
-
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
-                contract: () => ({
-                    a: api,
-                    v: view
-                })
-            }))
-
-            mockStdlib.tokensAccepted.mockImplementation(() => [
-                {
-                    toNumber: () => 'other_project_token_id'
-                }
-            ])
-
-            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({
-                approved: true
-            })
-
-            expect(mockStdlib.tokensAccepted).toHaveBeenCalledTimes(1)
-            expect(mockStdlib.tokensAccepted).toHaveBeenCalledWith('formatted project_creator')
-
-            expect(api.Api.payToken).not.toHaveBeenCalled()
-            expect(api.Api.setApprovalState).toHaveBeenCalledTimes(1)
-            expect(api.Api.setApprovalState).toHaveBeenCalledWith(true)
-
-            expect(mockPlaceRepository.setProjectApproval).toHaveBeenCalledTimes(1)
-            expect(mockPlaceRepository.setProjectApproval).toHaveBeenCalledWith(contractId, true)
-
-            expect(response.status).toBe(204)
-            expect(response.body).toEqual({})
-        })
-
-        it('should return 204 when rejecting project', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-
-            const api = {
-                Api: {
-                    setApprovalState: jest.fn().mockImplementation(() => Promise.resolve())
-                }
-            }
-
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
-                contract: () => ({
-                    a: api
-                })
-            }))
-
-            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({
-                approved: false
-            })
-
-            expect(api.Api.setApprovalState).toHaveBeenCalledTimes(1)
-            expect(api.Api.setApprovalState).toHaveBeenCalledWith(false)
-
-            expect(mockPlaceRepository.setProjectApproval).toHaveBeenCalledTimes(1)
-            expect(mockPlaceRepository.setProjectApproval).toHaveBeenCalledWith(contractId, false)
-
-            expect(response.status).toBe(204)
-            expect(response.body).toEqual({})
-        })
-
-        it('should return 400 when approval state not sent', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-
-            const api = {
-                Api: {
-                    setApprovalState: jest.fn().mockImplementation(() => Promise.resolve())
-                }
-            }
-
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
-                contract: () => ({
-                    a: api
-                })
-            }))
-
-            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({})
-
-            expect(api.Api.setApprovalState).not.toHaveBeenCalled()
-            expect(mockPlaceRepository.setProjectApproval).not.toHaveBeenCalled()
-
-            expect(response.status).toBe(400)
-            expect(response.body).toEqual({
-                error: 'MissingParameterError',
-                message: 'approved must be specified'
-            })
-        })
-
-        it('should return 403 when user is not admin', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-            authHandler.mockImplementation(async (ctx, next) => {
-                ctx.state.account = 'small_wallet'
-                await next()
-            })
-
-            const api = {
-                Api: {
-                    setApprovalState: jest.fn().mockImplementation(() => Promise.resolve())
-                }
-            }
-
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
-                contract: () => ({
-                    a: api
-                })
-            }))
-
-            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({
-                approved: true
-            })
-
-            expect(api.Api.setApprovalState).not.toHaveBeenCalled()
-            expect(mockPlaceRepository.setProjectApproval).not.toHaveBeenCalled()
-
-            expect(response.status).toBe(403)
-            expect(response.body).toEqual({
-                error: 'UserUnauthorizedError',
-                message: 'The authenticated user is not authorized to perform this action'
-            })
-        })
-
-        it('should return 400 when contract id is malformed', async () => {
-            const contractId = 'contract_id'
-
-            const api = {
-                Api: {
-                    setApprovalState: jest.fn().mockImplementation(() => Promise.resolve())
-                }
-            }
-
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
-                contract: () => ({
-                    a: api
-                })
-            }))
-
-            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({
-                approved: true
-            })
-
-            expect(api.Api.setApprovalState).not.toHaveBeenCalled()
-            expect(mockPlaceRepository.setProjectApproval).not.toHaveBeenCalled()
-
-            expect(response.status).toBe(400)
-            expect(response.body).toEqual({
-                error: 'ContractIdMalformedError',
-                message: 'The specified contract identifier is malformed'
-            })
-        })
-
-        it('should return 500 when api fails', async () => {
-            const contractId = 'eyJ0eXBlIjoiQmlnTnVtYmVyIiwiaGV4IjoiMHgwNmZkMmIzMyJ9'
-
-            const api = {
-                Api: {
-                    setApprovalState: jest.fn().mockImplementation(() => Promise.reject())
-                }
-            }
-
-            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
-                networkAccount: { addr: 'wallet_address', sk: 'account_sk' },
-                contract: () => ({
-                    a: api
-                })
-            }))
-
-            const response = await request(app.callback()).put(`/projects/${contractId}/approval`).send({
-                approved: false
-            })
-
-            expect(api.Api.setApprovalState).toHaveBeenCalledTimes(1)
-            expect(api.Api.setApprovalState).toHaveBeenCalledWith(false)
-
-            expect(mockPlaceRepository.setProjectApproval).not.toHaveBeenCalled()
-
-            expect(response.status).toBe(500)
-            expect(response.body).toEqual({
-                error: 'UpdatePlaceTokenError',
-                message: 'Unable to update place token'
-            })
-        })
-    })
-
     describe('get place endpoint', function () {
         it('should return 200 when getting place and user has wallet and has not opted in to the token', async () => {
             const tokenId = 'token-id'
@@ -1629,8 +1356,8 @@ describe('app', function () {
         })
     })
 
-    describe('get projects by user endpoint', function () {
-        it('should return 200 when getting projects and all is fine', async () => {
+    describe('get places by user endpoint', function () {
+        it('should return 200 when getting places and all is fine', async () => {
             mockPlaceRepository.getPlacesByUser.mockImplementation(() => ({
                 places: [
                     {
@@ -1668,6 +1395,22 @@ describe('app', function () {
                     }
                 ]
             })
+        })
+    })
+
+    describe('approve place endpoint', function () {
+        it('should return 204 when deleting place', async () => {
+            const tokenId = 'token-id'
+
+            mockPlaceRepository.approvePlace.mockImplementation(() => Promise.resolve())
+
+            const response = await request(app.callback()).put(`/places/${tokenId}/approval`)
+
+            expect(mockPlaceRepository.approvePlace).toHaveBeenCalledTimes(1)
+            expect(mockPlaceRepository.approvePlace).toHaveBeenCalledWith('jwt_sub', tokenId, true)
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
         })
     })
 

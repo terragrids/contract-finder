@@ -1,6 +1,6 @@
 import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb'
 import PlaceNotFoundError from '../error/place-not-found.error.js'
-import DynamoDbRepository, { PERMISSION_DELETE_PLACE } from './dynamodb.repository.js'
+import DynamoDbRepository, { PERMISSION_APPROVE_PLACE, PERMISSION_ARCHIVE_PLACE } from './dynamodb.repository.js'
 
 export default class PlaceRepository extends DynamoDbRepository {
     placePrefix = 'place'
@@ -70,15 +70,17 @@ export default class PlaceRepository extends DynamoDbRepository {
         }
     }
 
-    async deletePlace(userId, tokenId) {
-        const now = Date.now()
+    async approvePlace(userId, tokenId, approved) {
         try {
+            const state = approved ? 'approved' : 'rejected'
+            const now = Date.now()
             await this.update({
                 key: { pk: { S: `${this.placePrefix}|${tokenId}` } },
                 attributes: {
-                    '#data': { S: `${this.placePrefix}|archived|${now}` }
+                    '#data': { S: `${this.placePrefix}|${state}|${now}` },
+                    approvalDate: { N: now.toString() }
                 },
-                permissions: [PERMISSION_DELETE_PLACE],
+                permissions: [PERMISSION_APPROVE_PLACE],
                 userId,
                 itemLogName: this.itemName
             })
@@ -88,16 +90,17 @@ export default class PlaceRepository extends DynamoDbRepository {
         }
     }
 
-    async setProjectApproval(contractId, approved) {
+    async deletePlace(userId, tokenId) {
+        const now = Date.now()
         try {
-            const state = approved ? 'approved' : 'rejected'
-            const now = Date.now()
             await this.update({
-                key: { pk: { S: `${this.placePrefix}|${contractId}` } },
+                key: { pk: { S: `${this.placePrefix}|${tokenId}` } },
                 attributes: {
-                    '#data': { S: `${this.itemName}|${state}|${now}` },
-                    approvalDate: { N: now.toString() }
+                    '#data': { S: `${this.placePrefix}|archived|${now}` },
+                    archiveDate: { N: now.toString() }
                 },
+                permissions: [PERMISSION_ARCHIVE_PLACE],
+                userId,
                 itemLogName: this.itemName
             })
         } catch (e) {

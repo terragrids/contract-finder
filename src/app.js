@@ -7,20 +7,18 @@ import bodyParser from 'koa-bodyparser'
 import errorHandler from './middleware/error-handler.js'
 import requestLogger from './middleware/request-logger.js'
 import ReachProvider from './provider/reach-provider.js'
-import * as backend from '../reach/project-contract/build/index.main.mjs'
-import { getContractFromJsonString, truncateString } from './utils/string-utils.js'
+import { truncateString } from './utils/string-utils.js'
 import MissingParameterError from './error/missing-parameter.error.js'
 import ParameterTooLongError from './error/parameter-too-long.error.js'
 import DynamoDbRepository from './repository/dynamodb.repository.js'
 import PlaceRepository from './repository/place.repository.js'
 import UpdatePlaceTokenError from './error/update-contract.error.js'
-import authHandler from './middleware/auth-handler.js'
 import { UserUnauthorizedError } from './error/user-unauthorized-error.js'
 import MintTokenError from './error/mint-token.error.js'
 import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-utils.js'
 import AlgoIndexer from './network/algo-indexer.js'
 import AssetNotFoundError from './error/asset-not-found.error.js'
-import { isAdminWallet, isTokenAccepted } from './utils/wallet-utils.js'
+import { isTokenAccepted } from './utils/wallet-utils.js'
 import jwtAuthorize from './middleware/jwt-authorize.js'
 import UserRepository from './repository/user.repository.js'
 import { TypePositiveOrZeroNumberError } from './error/type-positive-number.error.js'
@@ -180,40 +178,10 @@ router.put('/places/:tokenId', jwtAuthorize, bodyParser(), async ctx => {
     }
 })
 
-router.put('/projects/:contractId/approval', authHandler, bodyParser(), async ctx => {
-    if (ctx.request.body.approved === undefined) throw new MissingParameterError('approved')
-    if (!isAdminWallet(ctx.state.account)) throw new UserUnauthorizedError()
-
-    const approved = ctx.request.body.approved === true ? true : false
-    const infoObject = getContractFromJsonString(ctx.params.contractId)
-
-    try {
-        const stdlib = new ReachProvider().getStdlib()
-        const algoAccount = await stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC)
-
-        const contract = algoAccount.contract(backend, infoObject)
-
-        const api = contract.a.Api
-
-        if (approved) {
-            const view = contract.v.View
-            const creator = stdlib.formatAddress((await view.creator())[1])
-            const tokenId = (await view.token())[1].toNumber()
-            const tokenAccepted = await isTokenAccepted(stdlib, creator, tokenId)
-
-            // Approve and pay the token if the creator opted in, otherwise just approve
-            if (tokenAccepted) await api.payToken()
-            else await api.setApprovalState(true)
-        } else {
-            await api.setApprovalState(false)
-        }
-
-        await new PlaceRepository().setProjectApproval(ctx.params.contractId, approved)
-
-        ctx.status = 204
-    } catch (e) {
-        throw new UpdatePlaceTokenError(e)
-    }
+router.put('/places/:tokenId/approval', jwtAuthorize, async ctx => {
+    await new PlaceRepository().approvePlace(ctx.state.jwt.sub, ctx.params.tokenId, true)
+    ctx.body = ''
+    ctx.status = 204
 })
 
 router.get('/places', async ctx => {

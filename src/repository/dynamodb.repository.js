@@ -15,7 +15,8 @@ import Logger from '../logging/logger.js'
 import { UserUnauthorizedError } from '../error/user-unauthorized-error.js'
 
 export const PERMISSION_ALL = '0'
-export const PERMISSION_DELETE_PLACE = '1'
+export const PERMISSION_APPROVE_PLACE = '1'
+export const PERMISSION_ARCHIVE_PLACE = '2'
 
 export default class DynamoDbRepository {
     client
@@ -96,7 +97,7 @@ export default class DynamoDbRepository {
         if (permissions && userId) {
             const transactParams = {
                 TransactItems: [
-                    this.checkPermissions(userId, [PERMISSION_DELETE_PLACE]),
+                    this.checkPermissions(userId, [PERMISSION_ARCHIVE_PLACE]),
                     {
                         Update: updateParams
                     }
