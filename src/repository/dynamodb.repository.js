@@ -140,11 +140,12 @@ export default class DynamoDbRepository {
         }
     }
 
-    async query({ indexName, conditionExpression, attributeNames, attributeValues, pageSize = 10, nextPageKey, forward = true, itemLogName = 'item' }) {
+    async query({ indexName, conditionExpression, filterExpression, attributeNames, attributeValues, pageSize = 10, nextPageKey, forward = true, itemLogName = 'item' }) {
         const params = {
             TableName: this.table,
             IndexName: indexName,
             KeyConditionExpression: conditionExpression,
+            FilterExpression: filterExpression,
             ExpressionAttributeNames: attributeNames,
             ExpressionAttributeValues: attributeValues,
             Limit: parseInt(pageSize),

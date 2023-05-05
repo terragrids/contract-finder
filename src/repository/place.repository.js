@@ -111,33 +111,83 @@ export default class PlaceRepository extends DynamoDbRepository {
 
     async getPlaces({ pageSize, nextPageKey, sort, status }) {
         const forward = sort && sort === 'desc' ? false : true
-        let condition = 'gsi2pk = :gsi2pk'
+        const condition = 'gsi2pk = :gsi2pk'
+
+        let data
+        let statuses = []
         if (status) {
-            condition = `${condition} AND begins_with(#data, :status)`
+            statuses = status.split(',')
+            const queryPageKeys = nextPageKey ? nextPageKey.split('|') : null
+            const promises = []
+            data = {
+                items: [],
+                nextPageKey: ''
+            }
+
+            for (const [index, value] of statuses.entries()) {
+                // Continue fetching only if no next page key or a next page key is specified for this status
+                if (!queryPageKeys || (queryPageKeys && queryPageKeys[index])) {
+                    promises.push(
+                        this.query({
+                            indexName: 'gsi2',
+                            conditionExpression: `${condition} AND begins_with(#data, :status)`,
+                            ...(status && { attributeNames: { '#data': 'data' } }),
+                            attributeValues: {
+                                ':gsi2pk': { S: `type|${this.placePrefix}` },
+                                ...(status && { ':status': { S: `${this.placePrefix}|${value}` } })
+                            },
+                            pageSize,
+                            nextPageKey: queryPageKeys ? queryPageKeys[index] : null,
+                            forward
+                        })
+                    )
+                } else {
+                    promises.push(Promise.resolve({ items: [] }))
+                }
+            }
+
+            const queryResults = await Promise.all(promises)
+            const nextPageKeys = []
+
+            for (const result of queryResults) {
+                data.items.push(...result.items)
+                if (result.nextPageKey) nextPageKeys.push(result.nextPageKey)
+                else nextPageKeys.push('')
+            }
+
+            data.nextPageKey = nextPageKeys.join('|')
+
+            const getDate = place => place.data.S.split('|')[2]
+            const compareAsc = (a, b) => (a > b ? 1 : a < b ? -1 : 0)
+            const compareDesc = (a, b) => (a < b ? 1 : a > b ? -1 : 0)
+            data.items.sort((a, b) => (forward ? compareAsc(getDate(a), getDate(b)) : compareDesc(getDate(a), getDate(b))))
+        } else {
+            data = await this.query({
+                indexName: 'gsi2',
+                conditionExpression: condition,
+                attributeValues: {
+                    ':gsi2pk': { S: `type|${this.placePrefix}` }
+                },
+                pageSize,
+                nextPageKey,
+                forward
+            })
         }
-        const data = await this.query({
-            indexName: 'gsi2',
-            conditionExpression: condition,
-            ...(status && { attributeNames: { '#data': 'data' } }),
-            attributeValues: {
-                ':gsi2pk': { S: `type|${this.placePrefix}` },
-                ...(status && { ':status': { S: `${this.placePrefix}|${status}` } })
-            },
-            pageSize,
-            nextPageKey,
-            forward
-        })
 
         return {
-            places: data.items.map(place => ({
-                id: place.pk.S.replace(`${this.placePrefix}|`, ''),
-                status: place.data.S.split('|')[1],
-                userId: place.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
-                name: place.name.S,
-                offChainImageUrl: place.offChainImageUrl.S,
-                positionX: parseInt(place.positionX.N),
-                positionY: parseInt(place.positionY.N)
-            })),
+            places: data.items.map(place => {
+                const [, status, date] = place.data.S.split('|')
+                return {
+                    id: place.pk.S.replace(`${this.placePrefix}|`, ''),
+                    status: status,
+                    userId: place.gsi1pk.S.replace(`${this.userPrefix}|`, ''),
+                    name: place.name.S,
+                    offChainImageUrl: place.offChainImageUrl.S,
+                    positionX: parseInt(place.positionX.N),
+                    positionY: parseInt(place.positionY.N),
+                    lastModified: date
+                }
+            }),
             ...(data.nextPageKey && { nextPageKey: data.nextPageKey })
         }
     }
@@ -186,7 +236,7 @@ export default class PlaceRepository extends DynamoDbRepository {
                 await this.update({
                     key: { pk: { S: `${this.placePrefix}|${contractId}` } },
                     attributes: {
-                        '#data': { S: `${this.itemName}|archived|${now}` },
+                        '#data': { S: `${this.placePrefix}|archived|${now}` },
                         archived: { N: now.toString() }
                     },
                     itemLogName: this.itemName
