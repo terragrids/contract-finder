@@ -7,14 +7,12 @@ import bodyParser from 'koa-bodyparser'
 import errorHandler from './middleware/error-handler.js'
 import requestLogger from './middleware/request-logger.js'
 import ReachProvider from './provider/reach-provider.js'
-import { truncateString } from './utils/string-utils.js'
 import MissingParameterError from './error/missing-parameter.error.js'
 import ParameterTooLongError from './error/parameter-too-long.error.js'
 import DynamoDbRepository from './repository/dynamodb.repository.js'
 import PlaceRepository from './repository/place.repository.js'
 import UpdatePlaceTokenError from './error/update-contract.error.js'
 import { UserUnauthorizedError } from './error/user-unauthorized-error.js'
-import MintTokenError from './error/mint-token.error.js'
 import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-utils.js'
 import AlgoIndexer from './network/algo-indexer.js'
 import AssetNotFoundError from './error/asset-not-found.error.js'
@@ -23,6 +21,8 @@ import jwtAuthorize from './middleware/jwt-authorize.js'
 import UserRepository from './repository/user.repository.js'
 import { TypePositiveOrZeroNumberError } from './error/type-positive-number.error.js'
 import { isPositiveOrZeroNumber } from './utils/validators.js'
+import TrackerRepository from './repository/tracker.repository.js'
+import { mintToken } from './utils/token-minter.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -77,37 +77,10 @@ router.post('/places', jwtAuthorize, bodyParser(), async ctx => {
     const stdlib = new ReachProvider().getStdlib()
     const [algoAccount, user] = await Promise.all([stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
 
-    /**
-     * Mint place token
-     */
-    let tokenId
-    try {
-        const cid = ctx.request.body.cid
-        const { address, url } = algorandAddressFromCID(stdlib.algosdk, cid)
-        const cidFromAddress = cidFromAlgorandAddress(stdlib.algosdk, address)
-        if (cid !== cidFromAddress) throw new Error('Error verifying cid')
+    // Mint place token
+    const tokenId = await mintToken(stdlib, algoAccount, ctx.request.body.cid, ctx.request.body.name, 'TRPLC')
 
-        const managerAddress = algoAccount.networkAccount.addr
-        const assetName = truncateString(ctx.request.body.name, 32)
-
-        const token = await stdlib.launchToken(algoAccount, assetName, 'TRPLC', {
-            supply: 1,
-            decimals: 0,
-            url,
-            reserve: address,
-            manager: managerAddress,
-            freeze: managerAddress,
-            clawback: managerAddress
-        })
-
-        tokenId = token.id.toNumber()
-    } catch (e) {
-        throw new MintTokenError(e)
-    }
-
-    /**
-     * Save place off-chain
-     */
+    // Save place off-chain
     await new PlaceRepository().createPlace({
         tokenId,
         userId: user.id,
@@ -255,6 +228,34 @@ router.get('/users/:userId/places', async ctx => {
     })
     ctx.body = places
     ctx.status = 200
+})
+
+router.post('/trackers', jwtAuthorize, bodyParser(), async ctx => {
+    if (!ctx.request.body.name) throw new MissingParameterError('name')
+    if (!ctx.request.body.cid) throw new MissingParameterError('cid')
+    if (!ctx.request.body.offChainImageUrl) throw new MissingParameterError('offChainImageUrl')
+    if (!ctx.request.body.placeId) throw new MissingParameterError('placeId')
+
+    if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
+    if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
+
+    const stdlib = new ReachProvider().getStdlib()
+    const [algoAccount, user] = await Promise.all([stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
+
+    // Mint tracker token
+    const tokenId = await mintToken(stdlib, algoAccount, ctx.request.body.cid, ctx.request.body.name, 'TRTRK')
+
+    // Save place off-chain
+    await new TrackerRepository().createTracker({
+        tokenId,
+        userId: user.id,
+        placeId: ctx.request.body.placeId,
+        name: ctx.request.body.name,
+        offChainImageUrl: ctx.request.body.offChainImageUrl
+    })
+
+    ctx.body = { tokenId }
+    ctx.status = 201
 })
 
 app.use(requestLogger).use(errorHandler).use(router.routes()).use(router.allowedMethods())

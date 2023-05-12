@@ -46,18 +46,39 @@ export default class DynamoDbRepository {
         }
     }
 
-    async put({ item, itemLogName = 'item' }) {
-        const params = {
+    async put({ item, itemLogName = 'item', transactionConditions }) {
+        const putParams = {
             TableName: this.table,
             Item: item
         }
 
-        const command = new PutItemCommand(params)
+        if (transactionConditions) {
+            const transactParams = {
+                TransactItems: [
+                    ...transactionConditions,
+                    {
+                        Put: putParams
+                    }
+                ]
+            }
 
-        try {
-            return await this.client.send(command)
-        } catch (e) {
-            throw new RepositoryError(e, `Unable to put ${itemLogName}`)
+            const command = new TransactWriteItemsCommand(transactParams)
+
+            try {
+                return await this.client.send(command)
+            } catch (e) {
+                if (e instanceof ConditionalCheckFailedException) throw e
+                if (e instanceof TransactionCanceledException && e.CancellationReasons && e.CancellationReasons.some(r => r.Code === 'ConditionalCheckFailed')) throw new UserUnauthorizedError()
+                throw new RepositoryError(e, `Unable to update ${itemLogName}`)
+            }
+        } else {
+            const command = new PutItemCommand(putParams)
+
+            try {
+                return await this.client.send(command)
+            } catch (e) {
+                throw new RepositoryError(e, `Unable to put ${itemLogName}`)
+            }
         }
     }
 
@@ -203,6 +224,16 @@ export default class DynamoDbRepository {
                     '#permissions': 'permissions'
                 },
                 ExpressionAttributeValues: expressionAttributeValues
+            }
+        }
+    }
+
+    checkPlaceBelongsToUser(tokenId, userId) {
+        return {
+            ConditionCheck: {
+                TableName: this.table,
+                Key: { pk: { S: `place|${tokenId}` } },
+                ConditionExpression: `gsi1pk = user|${userId}`
             }
         }
     }

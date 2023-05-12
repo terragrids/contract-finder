@@ -65,6 +65,15 @@ jest.mock('./repository/place.repository.js', () =>
     }))
 )
 
+const mockTrackerRepository = {
+    createTracker: jest.fn().mockImplementation(() => jest.fn())
+}
+jest.mock('./repository/tracker.repository.js', () =>
+    jest.fn().mockImplementation(() => ({
+        createTracker: mockTrackerRepository.createTracker
+    }))
+)
+
 const mockUserRepository = {
     getUserById: jest.fn().mockImplementation(() => jest.fn()),
     getUserByOauthId: jest.fn().mockImplementation(() => jest.fn())
@@ -1427,6 +1436,261 @@ describe('app', function () {
 
             expect(response.status).toBe(204)
             expect(response.body).toEqual({})
+        })
+    })
+
+    describe('post trackers endpoint', function () {
+        it('should return 201 when posting new tracker and all is fine', async () => {
+            mockStdlib.launchToken.mockImplementation(() => ({
+                id: { toNumber: () => 1234 }
+            }))
+
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'tracker cid')
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address' }
+            }))
+
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user_id'
+            }))
+
+            const response = await request(app.callback()).post('/trackers').send({
+                name: 'tracker name',
+                cid: 'tracker cid',
+                placeId: 'place id',
+                offChainImageUrl: 'image url'
+            })
+
+            expect(mockStdlib.launchToken).toHaveBeenCalledTimes(1)
+            expect(mockStdlib.launchToken).toHaveBeenCalledWith(expect.any(Object), 'tracker name', 'TRTRK', {
+                decimals: 0,
+                manager: 'wallet_address',
+                clawback: 'wallet_address',
+                freeze: 'wallet_address',
+                reserve: 'reserve_address',
+                supply: 1,
+                url: 'token_url'
+            })
+
+            expect(mockTrackerRepository.createTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.createTracker).toHaveBeenCalledWith({
+                userId: 'user_id',
+                name: 'tracker name',
+                offChainImageUrl: 'image url',
+                tokenId: 1234,
+                placeId: 'place id'
+            })
+
+            expect(response.status).toBe(201)
+            expect(response.body).toEqual({
+                tokenId: 1234
+            })
+        })
+
+        it('should return 201 when posting new place with long name', async () => {
+            mockStdlib.launchToken.mockImplementation(() => ({
+                id: { toNumber: () => 1234 }
+            }))
+
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'tracker cid')
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address' }
+            }))
+
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user_id'
+            }))
+
+            const response = await request(app.callback()).post('/trackers').send({
+                name: 'Louisville and Nashville Railroad Office Building',
+                cid: 'tracker cid',
+                creator: 'tracker user',
+                offChainImageUrl: 'image url',
+                placeId: 'place id'
+            })
+
+            expect(mockStdlib.launchToken).toHaveBeenCalledTimes(1)
+            expect(mockStdlib.launchToken).toHaveBeenCalledWith(expect.any(Object), 'Louisville and Nashville Rail…', 'TRTRK', {
+                decimals: 0,
+                manager: 'wallet_address',
+                clawback: 'wallet_address',
+                freeze: 'wallet_address',
+                reserve: 'reserve_address',
+                supply: 1,
+                url: 'token_url'
+            })
+
+            expect(mockTrackerRepository.createTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.createTracker).toHaveBeenCalledWith({
+                userId: 'user_id',
+                name: 'Louisville and Nashville Railroad Office Building',
+                offChainImageUrl: 'image url',
+                tokenId: 1234,
+                placeId: 'place id'
+            })
+
+            expect(response.status).toBe(201)
+            expect(response.body).toEqual({
+                tokenId: 1234
+            })
+        })
+
+        it('should return 500 when launch token fails', async () => {
+            mockStdlib.launchToken.mockImplementation(() => {
+                throw new Error()
+            })
+
+            const response = await request(app.callback()).post('/trackers').send({
+                name: 'tracker name',
+                cid: 'tracker cid',
+                offChainImageUrl: 'image url',
+                placeId: 'place id'
+            })
+
+            expect(response.status).toBe(500)
+            expect(response.body).toEqual({
+                error: 'MintTokenError',
+                message: 'Unable to mint token'
+            })
+        })
+
+        it('should return 500 when cid verification fails', async () => {
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'tracker meh')
+
+            const response = await request(app.callback()).post('/trackers').send({
+                name: 'tracker name',
+                cid: 'tracker cid',
+                offChainImageUrl: 'image url',
+                placeId: 'place id'
+            })
+
+            expect(response.status).toBe(500)
+            expect(response.body).toEqual({
+                error: 'MintTokenError',
+                message: 'Unable to mint token'
+            })
+        })
+
+        it('should return 500 when saving tracker in repository fails', async () => {
+            mockTrackerRepository.createTracker.mockImplementation(() => {
+                throw new Error()
+            })
+
+            mockStdlib.launchToken.mockImplementation(() => ({
+                id: { toNumber: () => 1234 }
+            }))
+
+            algorandAddressFromCID.mockImplementation(() => ({ address: 'reserve_address', url: 'token_url' }))
+            cidFromAlgorandAddress.mockImplementation(() => 'tracker cid')
+
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address' }
+            }))
+
+            const response = await request(app.callback()).post('/trackers').send({
+                name: 'tracker name',
+                cid: 'tracker cid',
+                offChainImageUrl: 'image url',
+                placeId: 'place id'
+            })
+
+            expect(response.status).toBe(500)
+            expect(response.body).toEqual({})
+        })
+
+        it('should return 400 when tracker name is missing', async () => {
+            const response = await request(app.callback()).post('/trackers').send({
+                cid: 'tracker cid',
+                offChainImageUrl: 'image url',
+                placeId: 'place id'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'name must be specified'
+            })
+        })
+
+        it('should return 400 when tracker cid is missing', async () => {
+            const response = await request(app.callback()).post('/trackers').send({
+                name: 'tracker name',
+                offChainImageUrl: 'image url',
+                placeId: 'place id'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'cid must be specified'
+            })
+        })
+
+        it('should return 400 when tracker offChainImageUrl is missing', async () => {
+            const response = await request(app.callback()).post('/trackers').send({
+                name: 'tracker name',
+                cid: 'tracker cid',
+                placeId: 'place id'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'offChainImageUrl must be specified'
+            })
+        })
+
+        it('should return 400 when tracker place id is missing', async () => {
+            const response = await request(app.callback()).post('/trackers').send({
+                name: 'tracker name',
+                cid: 'tracker cid',
+                offChainImageUrl: 'image url'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'placeId must be specified'
+            })
+        })
+
+        it('should return 400 when tracker name is too long', async () => {
+            const response = await request(app.callback())
+                .post('/trackers')
+                .send({
+                    name: '#'.repeat(129),
+                    cid: 'tracker cid',
+                    offChainImageUrl: 'image url',
+                    placeId: 'place id'
+                })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ParameterTooLongError',
+                message: 'name is too long'
+            })
+        })
+
+        it('should return 400 when tracker offChainImageUrl is too long', async () => {
+            const response = await request(app.callback())
+                .post('/trackers')
+                .send({
+                    name: 'tracker name',
+                    cid: 'tracker cid',
+                    offChainImageUrl: '#'.repeat(129),
+                    placeId: 'place id'
+                })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ParameterTooLongError',
+                message: 'offChainImageUrl is too long'
+            })
         })
     })
 })
