@@ -66,11 +66,13 @@ jest.mock('./repository/place.repository.js', () =>
 )
 
 const mockTrackerRepository = {
-    createTracker: jest.fn().mockImplementation(() => jest.fn())
+    createTracker: jest.fn().mockImplementation(() => jest.fn()),
+    getTrackers: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/tracker.repository.js', () =>
     jest.fn().mockImplementation(() => ({
-        createTracker: mockTrackerRepository.createTracker
+        createTracker: mockTrackerRepository.createTracker,
+        getTrackers: mockTrackerRepository.getTrackers
     }))
 )
 
@@ -1690,6 +1692,49 @@ describe('app', function () {
             expect(response.body).toEqual({
                 error: 'ParameterTooLongError',
                 message: 'offChainImageUrl is too long'
+            })
+        })
+    })
+
+    describe('get trackers endpoint', function () {
+        it('should return 200 when getting trackers and all is fine', async () => {
+            mockTrackerRepository.getTrackers.mockImplementation(() => ({
+                trackers: [
+                    {
+                        id: 'tracker-id-1',
+                        created: 'tracker-date-1'
+                    },
+                    {
+                        id: 'tracker-id-2',
+                        created: 'tracker-date-2'
+                    }
+                ]
+            }))
+
+            const response = await request(app.callback()).get('/places/place-id/trackers?sort=asc&status=active&type=electricity-meter&pageSize=12&nextPageKey=page-key')
+
+            expect(mockTrackerRepository.getTrackers).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTrackers).toHaveBeenCalledWith({
+                placeId: 'place-id',
+                status: 'active',
+                type: 'electricity-meter',
+                sort: 'asc',
+                nextPageKey: 'page-key',
+                pageSize: '12'
+            })
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                trackers: [
+                    {
+                        id: 'tracker-id-1',
+                        created: 'tracker-date-1'
+                    },
+                    {
+                        id: 'tracker-id-2',
+                        created: 'tracker-date-2'
+                    }
+                ]
             })
         })
     })

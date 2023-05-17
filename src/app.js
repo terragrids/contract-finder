@@ -258,4 +258,17 @@ router.post('/trackers', jwtAuthorize, bodyParser(), async ctx => {
     ctx.status = 201
 })
 
+router.get('/places/:tokenId/trackers', async ctx => {
+    const places = await new TrackerRepository().getTrackers({
+        placeId: ctx.params.tokenId,
+        sort: ctx.request.query.sort,
+        status: ctx.request.query.status,
+        type: ctx.request.query.type,
+        pageSize: ctx.request.query.pageSize,
+        nextPageKey: ctx.request.query.nextPageKey
+    })
+    ctx.body = places
+    ctx.status = 200
+})
+
 app.use(requestLogger).use(errorHandler).use(router.routes()).use(router.allowedMethods())
