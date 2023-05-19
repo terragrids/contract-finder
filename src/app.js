@@ -232,11 +232,13 @@ router.get('/users/:userId/places', async ctx => {
 
 router.post('/trackers', jwtAuthorize, bodyParser(), async ctx => {
     if (!ctx.request.body.name) throw new MissingParameterError('name')
+    if (!ctx.request.body.type) throw new MissingParameterError('type')
     if (!ctx.request.body.cid) throw new MissingParameterError('cid')
     if (!ctx.request.body.offChainImageUrl) throw new MissingParameterError('offChainImageUrl')
     if (!ctx.request.body.placeId) throw new MissingParameterError('placeId')
 
     if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
+    if (ctx.request.body.type.length > 128) throw new ParameterTooLongError('type')
     if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
 
     const stdlib = new ReachProvider().getStdlib()
@@ -251,6 +253,7 @@ router.post('/trackers', jwtAuthorize, bodyParser(), async ctx => {
         userId: user.id,
         placeId: ctx.request.body.placeId,
         name: ctx.request.body.name,
+        type: ctx.request.body.type,
         offChainImageUrl: ctx.request.body.offChainImageUrl
     })
 

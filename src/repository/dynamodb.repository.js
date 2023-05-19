@@ -233,7 +233,10 @@ export default class DynamoDbRepository {
             ConditionCheck: {
                 TableName: this.table,
                 Key: { pk: { S: `place|${tokenId}` } },
-                ConditionExpression: `gsi1pk = user|${userId}`
+                ConditionExpression: 'gsi1pk = :user',
+                ExpressionAttributeValues: {
+                    ':user': { S: `user|${userId}` }
+                }
             }
         }
     }

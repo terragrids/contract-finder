@@ -1460,6 +1460,7 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/trackers').send({
                 name: 'tracker name',
+                type: 'tracker type',
                 cid: 'tracker cid',
                 placeId: 'place id',
                 offChainImageUrl: 'image url'
@@ -1480,6 +1481,7 @@ describe('app', function () {
             expect(mockTrackerRepository.createTracker).toHaveBeenCalledWith({
                 userId: 'user_id',
                 name: 'tracker name',
+                type: 'tracker type',
                 offChainImageUrl: 'image url',
                 tokenId: 1234,
                 placeId: 'place id'
@@ -1491,7 +1493,7 @@ describe('app', function () {
             })
         })
 
-        it('should return 201 when posting new place with long name', async () => {
+        it('should return 201 when posting new tracker with long name', async () => {
             mockStdlib.launchToken.mockImplementation(() => ({
                 id: { toNumber: () => 1234 }
             }))
@@ -1509,6 +1511,7 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/trackers').send({
                 name: 'Louisville and Nashville Railroad Office Building',
+                type: 'tracker type',
                 cid: 'tracker cid',
                 creator: 'tracker user',
                 offChainImageUrl: 'image url',
@@ -1530,6 +1533,7 @@ describe('app', function () {
             expect(mockTrackerRepository.createTracker).toHaveBeenCalledWith({
                 userId: 'user_id',
                 name: 'Louisville and Nashville Railroad Office Building',
+                type: 'tracker type',
                 offChainImageUrl: 'image url',
                 tokenId: 1234,
                 placeId: 'place id'
@@ -1548,6 +1552,7 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/trackers').send({
                 name: 'tracker name',
+                type: 'tracker type',
                 cid: 'tracker cid',
                 offChainImageUrl: 'image url',
                 placeId: 'place id'
@@ -1566,6 +1571,7 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/trackers').send({
                 name: 'tracker name',
+                type: 'tracker type',
                 cid: 'tracker cid',
                 offChainImageUrl: 'image url',
                 placeId: 'place id'
@@ -1596,6 +1602,7 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/trackers').send({
                 name: 'tracker name',
+                type: 'tracker type',
                 cid: 'tracker cid',
                 offChainImageUrl: 'image url',
                 placeId: 'place id'
@@ -1607,6 +1614,7 @@ describe('app', function () {
 
         it('should return 400 when tracker name is missing', async () => {
             const response = await request(app.callback()).post('/trackers').send({
+                type: 'tracker type',
                 cid: 'tracker cid',
                 offChainImageUrl: 'image url',
                 placeId: 'place id'
@@ -1619,8 +1627,24 @@ describe('app', function () {
             })
         })
 
+        it('should return 400 when tracker type is missing', async () => {
+            const response = await request(app.callback()).post('/trackers').send({
+                name: 'tracker name',
+                cid: 'tracker cid',
+                offChainImageUrl: 'image url',
+                placeId: 'place id'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'type must be specified'
+            })
+        })
+
         it('should return 400 when tracker cid is missing', async () => {
             const response = await request(app.callback()).post('/trackers').send({
+                type: 'tracker type',
                 name: 'tracker name',
                 offChainImageUrl: 'image url',
                 placeId: 'place id'
@@ -1635,6 +1659,7 @@ describe('app', function () {
 
         it('should return 400 when tracker offChainImageUrl is missing', async () => {
             const response = await request(app.callback()).post('/trackers').send({
+                type: 'tracker type',
                 name: 'tracker name',
                 cid: 'tracker cid',
                 placeId: 'place id'
@@ -1649,6 +1674,7 @@ describe('app', function () {
 
         it('should return 400 when tracker place id is missing', async () => {
             const response = await request(app.callback()).post('/trackers').send({
+                type: 'tracker type',
                 name: 'tracker name',
                 cid: 'tracker cid',
                 offChainImageUrl: 'image url'
@@ -1666,6 +1692,7 @@ describe('app', function () {
                 .post('/trackers')
                 .send({
                     name: '#'.repeat(129),
+                    type: 'tracker type',
                     cid: 'tracker cid',
                     offChainImageUrl: 'image url',
                     placeId: 'place id'
@@ -1678,11 +1705,30 @@ describe('app', function () {
             })
         })
 
+        it('should return 400 when tracker type is too long', async () => {
+            const response = await request(app.callback())
+                .post('/trackers')
+                .send({
+                    name: 'tracker name',
+                    type: '#'.repeat(129),
+                    cid: 'tracker cid',
+                    offChainImageUrl: 'image url',
+                    placeId: 'place id'
+                })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ParameterTooLongError',
+                message: 'type is too long'
+            })
+        })
+
         it('should return 400 when tracker offChainImageUrl is too long', async () => {
             const response = await request(app.callback())
                 .post('/trackers')
                 .send({
                     name: 'tracker name',
+                    type: 'tracker type',
                     cid: 'tracker cid',
                     offChainImageUrl: '#'.repeat(129),
                     placeId: 'place id'
