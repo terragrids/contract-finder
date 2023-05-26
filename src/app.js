@@ -14,15 +14,13 @@ import PlaceRepository from './repository/place.repository.js'
 import UpdatePlaceTokenError from './error/update-contract.error.js'
 import { UserUnauthorizedError } from './error/user-unauthorized-error.js'
 import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-utils.js'
-import AlgoIndexer from './network/algo-indexer.js'
-import AssetNotFoundError from './error/asset-not-found.error.js'
-import { isTokenAccepted } from './utils/wallet-utils.js'
 import jwtAuthorize from './middleware/jwt-authorize.js'
 import UserRepository from './repository/user.repository.js'
 import { TypePositiveOrZeroNumberError } from './error/type-positive-number.error.js'
 import { isPositiveOrZeroNumber } from './utils/validators.js'
 import TrackerRepository from './repository/tracker.repository.js'
 import { mintToken } from './utils/token-minter.js'
+import { getTokenWithUserInfo } from './utils/token-info.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -171,44 +169,11 @@ router.get('/places', async ctx => {
 router.get('/places/:tokenId', async ctx => {
     const place = await new PlaceRepository().getPlace(ctx.params.tokenId)
     const user = await new UserRepository().getUserById(place.userId)
-
-    const algoIndexer = new AlgoIndexer()
-    let extraData
-
-    if (user.walletAddress) {
-        const stdlib = new ReachProvider().getStdlib()
-        const tokenCreatorOptIn = await isTokenAccepted(stdlib, user.walletAddress, ctx.params.tokenId)
-
-        const [assetResponse, balancesResponse] = await Promise.all([
-            algoIndexer.callAlgonodeIndexerEndpoint(`assets/${ctx.params.tokenId}`),
-            algoIndexer.callAlgonodeIndexerEndpoint(`assets/${ctx.params.tokenId}/balances`)
-        ])
-
-        if (!assetResponse || assetResponse.status !== 200 || assetResponse.json.asset.deleted || !balancesResponse || balancesResponse.status !== 200) {
-            throw new AssetNotFoundError()
-        }
-
-        const userWalletOwned = balancesResponse.json.balances.some(balance => balance.amount > 0 && !balance.deleted && balance.address === user.walletAddress)
-
-        extraData = {
-            url: assetResponse.json.asset.params.url,
-            reserve: assetResponse.json.asset.params.reserve,
-            tokenCreatorOptIn,
-            userWalletOwned
-        }
-    } else {
-        const assetResponse = await new AlgoIndexer().callAlgonodeIndexerEndpoint(`assets/${ctx.params.tokenId}`)
-        if (assetResponse.status !== 200 || assetResponse.json.asset.deleted) throw new AssetNotFoundError()
-
-        extraData = {
-            url: assetResponse.json.asset.params.url,
-            reserve: assetResponse.json.asset.params.reserve
-        }
-    }
+    const tokenInfo = await getTokenWithUserInfo(ctx.params.tokenId, user.walletAddress)
 
     ctx.body = {
         ...place,
-        ...extraData
+        ...tokenInfo
     }
 })
 
@@ -272,6 +237,17 @@ router.get('/places/:tokenId/trackers', async ctx => {
     })
     ctx.body = places
     ctx.status = 200
+})
+
+router.get('/trackers/:tokenId', async ctx => {
+    const tracker = await new TrackerRepository().getTracker(ctx.params.tokenId)
+    const user = await new UserRepository().getUserById(tracker.userId)
+    const tokenInfo = await getTokenWithUserInfo(ctx.params.tokenId, user.walletAddress)
+
+    ctx.body = {
+        ...tracker,
+        ...tokenInfo
+    }
 })
 
 app.use(requestLogger).use(errorHandler).use(router.routes()).use(router.allowedMethods())

@@ -1,4 +1,6 @@
+import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb'
 import DynamoDbRepository from './dynamodb.repository.js'
+import TrackerNotFoundError from '../error/tracker-not-found.error.js'
 
 export default class TrackerRepository extends DynamoDbRepository {
     trackerPrefix = 'tracker'
@@ -14,6 +16,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                 gsi1pk: { S: `${this.placePrefix}|${placeId}` },
                 gsi2pk: { S: `type|${this.trackerPrefix}` },
                 data: { S: `${this.trackerPrefix}|active|${type}|${now}` },
+                userId: { S: userId },
                 created: { N: now.toString() },
                 name: { S: name },
                 offChainImageUrl: { S: offChainImageUrl }
@@ -65,6 +68,34 @@ export default class TrackerRepository extends DynamoDbRepository {
                 }
             }),
             ...(data.nextPageKey && { nextPageKey: data.nextPageKey })
+        }
+    }
+
+    async getTracker(tokenId) {
+        try {
+            const data = await this.get({
+                key: { pk: { S: `${this.trackerPrefix}|${tokenId}` } },
+                itemLogName: this.itemName
+            })
+
+            if (data.Item) {
+                const [, status, type, date] = data.Item.data.S.split('|')
+                return {
+                    id: tokenId,
+                    userId: data.Item.userId?.S,
+                    name: data.Item.name.S,
+                    status,
+                    type,
+                    offChainImageUrl: data.Item.offChainImageUrl.S,
+                    created: data.Item.created.N,
+                    lastModified: date
+                }
+            }
+
+            throw new TrackerNotFoundError()
+        } catch (e) {
+            if (e instanceof ConditionalCheckFailedException) throw new TrackerNotFoundError()
+            else throw e
         }
     }
 }

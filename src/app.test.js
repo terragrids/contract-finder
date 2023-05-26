@@ -67,12 +67,14 @@ jest.mock('./repository/place.repository.js', () =>
 
 const mockTrackerRepository = {
     createTracker: jest.fn().mockImplementation(() => jest.fn()),
-    getTrackers: jest.fn().mockImplementation(() => jest.fn())
+    getTrackers: jest.fn().mockImplementation(() => jest.fn()),
+    getTracker: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/tracker.repository.js', () =>
     jest.fn().mockImplementation(() => ({
         createTracker: mockTrackerRepository.createTracker,
-        getTrackers: mockTrackerRepository.getTrackers
+        getTrackers: mockTrackerRepository.getTrackers,
+        getTracker: mockTrackerRepository.getTracker
     }))
 )
 
@@ -1781,6 +1783,430 @@ describe('app', function () {
                         created: 'tracker-date-2'
                     }
                 ]
+            })
+        })
+    })
+
+    describe('get tracker endpoint', function () {
+        it('should return 200 when getting tracker and user has wallet and has not opted in to the token', async () => {
+            const tokenId = 'token-id'
+
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date',
+                name: 'tracker name'
+            }))
+
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id',
+                walletAddress: 'wallet-address'
+            }))
+
+            mockStdlib.tokensAccepted.mockImplementation(() => [
+                {
+                    toNumber: () => 'other-token-id'
+                }
+            ])
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(params => {
+                switch (params) {
+                    case `assets/${tokenId}`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                asset: {
+                                    index: tokenId,
+                                    params: {
+                                        name: 'token name',
+                                        total: 1,
+                                        decimals: 0,
+                                        'unit-name': 'TRPLC',
+                                        url: 'tracker url',
+                                        reserve: 'tracker reserve'
+                                    }
+                                }
+                            }
+                        })
+                    case `assets/${tokenId}/balances`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                balances: [
+                                    {
+                                        address: 'other-wallet-address',
+                                        amount: 1,
+                                        deleted: false
+                                    }
+                                ]
+                            }
+                        })
+                }
+            })
+
+            const response = await request(app.callback()).get(`/trackers/${tokenId}`)
+
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date',
+                name: 'tracker name',
+                url: 'tracker url',
+                reserve: 'tracker reserve',
+                tokenCreatorOptIn: false,
+                userWalletOwned: false
+            })
+        })
+
+        it('should return 200 when getting tracker and user has wallet and has opted in to the token', async () => {
+            const tokenId = 'token-id'
+
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date',
+                name: 'tracker name'
+            }))
+
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id',
+                walletAddress: 'wallet-address'
+            }))
+
+            mockStdlib.tokensAccepted.mockImplementation(() => [
+                {
+                    toNumber: () => 'token-id'
+                }
+            ])
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(params => {
+                switch (params) {
+                    case `assets/${tokenId}`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                asset: {
+                                    index: tokenId,
+                                    params: {
+                                        name: 'token name',
+                                        total: 1,
+                                        decimals: 0,
+                                        'unit-name': 'TRPLC',
+                                        url: 'tracker url',
+                                        reserve: 'tracker reserve'
+                                    }
+                                }
+                            }
+                        })
+                    case `assets/${tokenId}/balances`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                balances: [
+                                    {
+                                        address: 'other-wallet-address',
+                                        amount: 1,
+                                        deleted: false
+                                    }
+                                ]
+                            }
+                        })
+                }
+            })
+
+            const response = await request(app.callback()).get(`/trackers/${tokenId}`)
+
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date',
+                name: 'tracker name',
+                url: 'tracker url',
+                reserve: 'tracker reserve',
+                tokenCreatorOptIn: true,
+                userWalletOwned: false
+            })
+        })
+
+        it('should return 200 when getting tracker and user has token in wallet', async () => {
+            const tokenId = 'token-id'
+
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date',
+                name: 'tracker name'
+            }))
+
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id',
+                walletAddress: 'wallet-address'
+            }))
+
+            mockStdlib.tokensAccepted.mockImplementation(() => [
+                {
+                    toNumber: () => 'token-id'
+                }
+            ])
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(params => {
+                switch (params) {
+                    case `assets/${tokenId}`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                asset: {
+                                    index: tokenId,
+                                    params: {
+                                        name: 'token name',
+                                        total: 1,
+                                        decimals: 0,
+                                        'unit-name': 'TRPLC',
+                                        url: 'tracker url',
+                                        reserve: 'tracker reserve'
+                                    }
+                                }
+                            }
+                        })
+                    case `assets/${tokenId}/balances`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                balances: [
+                                    {
+                                        address: 'wallet-address',
+                                        amount: 1,
+                                        deleted: false
+                                    }
+                                ]
+                            }
+                        })
+                }
+            })
+
+            const response = await request(app.callback()).get(`/trackers/${tokenId}`)
+
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date',
+                name: 'tracker name',
+                url: 'tracker url',
+                reserve: 'tracker reserve',
+                tokenCreatorOptIn: true,
+                userWalletOwned: true
+            })
+        })
+
+        it('should return 200 when getting tracker and user has registered wallet and asset not found in indexer', async () => {
+            const tokenId = 'token-id'
+
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date'
+            }))
+
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id',
+                walletAddress: 'wallet-address'
+            }))
+
+            mockStdlib.tokensAccepted.mockImplementation(() => [
+                {
+                    toNumber: () => 'token-id'
+                }
+            ])
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(params => {
+                switch (params) {
+                    case `assets/${tokenId}`:
+                        return Promise.resolve({
+                            status: 404
+                        })
+                    case `assets/${tokenId}/balances`:
+                        return Promise.resolve({
+                            status: 200,
+                            json: {
+                                balances: [
+                                    {
+                                        address: 'wallet-address',
+                                        amount: 1,
+                                        deleted: false
+                                    }
+                                ]
+                            }
+                        })
+                }
+            })
+
+            const response = await request(app.callback()).get(`/trackers/${tokenId}`)
+
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
+
+            expect(response.status).toBe(404)
+            expect(response.body).toEqual({
+                error: 'AssetNotFoundError',
+                message: 'Asset specified not found'
+            })
+        })
+
+        it('should return 200 when getting tracker and user does not have registered wallet', async () => {
+            const tokenId = 'token-id'
+
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date',
+                name: 'tracker name'
+            }))
+
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id'
+            }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
+                return Promise.resolve({
+                    status: 200,
+                    json: {
+                        asset: {
+                            index: 123,
+                            params: {
+                                name: 'token name',
+                                total: 1,
+                                decimals: 0,
+                                'unit-name': 'TRPLC',
+                                url: 'tracker url',
+                                reserve: 'tracker reserve'
+                            }
+                        }
+                    }
+                })
+            })
+
+            const response = await request(app.callback()).get(`/trackers/${tokenId}`)
+
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date',
+                name: 'tracker name',
+                url: 'tracker url',
+                reserve: 'tracker reserve'
+            })
+        })
+
+        it('should return 200 when getting tracker and token not found in indexer', async () => {
+            const tokenId = 'token-id'
+
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date'
+            }))
+
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id'
+            }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
+                return Promise.resolve({
+                    status: 404
+                })
+            })
+
+            const response = await request(app.callback()).get(`/trackers/${tokenId}`)
+
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
+
+            expect(response.status).toBe(404)
+            expect(response.body).toEqual({
+                error: 'AssetNotFoundError',
+                message: 'Asset specified not found'
+            })
+        })
+
+        it('should return 200 when getting tracker and token deleted in indexer', async () => {
+            const tokenId = 'token-id'
+
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id',
+                created: 'creation-date'
+            }))
+
+            mockUserRepository.getUserById.mockImplementation(() => ({
+                id: 'user-id'
+            }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
+                return Promise.resolve({
+                    status: 200,
+                    json: {
+                        asset: {
+                            index: tokenId,
+                            deleted: true,
+                            params: {
+                                name: 'place name',
+                                total: 1,
+                                decimals: 0,
+                                'unit-name': 'TRPLC',
+                                url: 'tracker url',
+                                reserve: 'tracker reserve'
+                            }
+                        }
+                    }
+                })
+            })
+
+            const response = await request(app.callback()).get(`/trackers/${tokenId}`)
+
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
+
+            expect(mockUserRepository.getUserById).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserById).toHaveBeenCalledWith('user-id')
+
+            expect(response.status).toBe(404)
+            expect(response.body).toEqual({
+                error: 'AssetNotFoundError',
+                message: 'Asset specified not found'
             })
         })
     })
