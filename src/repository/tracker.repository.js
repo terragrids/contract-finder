@@ -100,7 +100,7 @@ export default class TrackerRepository extends DynamoDbRepository {
         }
     }
 
-    async createReading({ id, trackerId, userId, isAdmin }) {
+    async createReading({ id, trackerId, userId, encryptionIV, isAdmin }) {
         const now = Date.now()
 
         return await this.put({
@@ -110,7 +110,8 @@ export default class TrackerRepository extends DynamoDbRepository {
                 gsi2pk: { S: `type|${this.readingPrefix}` },
                 data: { S: `${this.readingPrefix}|active|${now}` },
                 userId: { S: userId },
-                created: { N: now.toString() }
+                created: { N: now.toString() },
+                encryptionIV: { S: encryptionIV }
             },
             itemLogName: this.itemName,
             ...(!isAdmin && { transactionConditions: [this.checkTrackerBelongsToUser(trackerId, userId)] })

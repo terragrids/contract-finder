@@ -11,6 +11,7 @@ const mockStdlib = {
     launchToken: jest.fn().mockImplementation(() => jest.fn()),
     algosdk: jest.fn().mockImplementation(() => jest.fn()),
     makeAssetConfigTxnWithSuggestedParamsFromObject: jest.fn().mockImplementation(() => jest.fn()),
+    makePaymentTxnWithSuggestedParamsFromObject: jest.fn().mockImplementation(() => jest.fn()),
     waitForConfirmation: jest.fn().mockImplementation(() => jest.fn()),
     tokensAccepted: jest.fn().mockImplementation(() => jest.fn())
 }
@@ -28,6 +29,7 @@ jest.mock('./provider/reach-provider.js', () =>
             tokensAccepted: mockStdlib.tokensAccepted,
             algosdk: {
                 makeAssetConfigTxnWithSuggestedParamsFromObject: mockStdlib.makeAssetConfigTxnWithSuggestedParamsFromObject,
+                makePaymentTxnWithSuggestedParamsFromObject: mockStdlib.makePaymentTxnWithSuggestedParamsFromObject,
                 waitForConfirmation: mockStdlib.waitForConfirmation
             }
         })),
@@ -68,13 +70,15 @@ jest.mock('./repository/place.repository.js', () =>
 const mockTrackerRepository = {
     createTracker: jest.fn().mockImplementation(() => jest.fn()),
     getTrackers: jest.fn().mockImplementation(() => jest.fn()),
-    getTracker: jest.fn().mockImplementation(() => jest.fn())
+    getTracker: jest.fn().mockImplementation(() => jest.fn()),
+    createReading: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/tracker.repository.js', () =>
     jest.fn().mockImplementation(() => ({
         createTracker: mockTrackerRepository.createTracker,
         getTrackers: mockTrackerRepository.getTrackers,
-        getTracker: mockTrackerRepository.getTracker
+        getTracker: mockTrackerRepository.getTracker,
+        createReading: mockTrackerRepository.createReading
     }))
 )
 
@@ -111,6 +115,12 @@ jest.mock('./network/algo-indexer.js', () =>
         callAlgonodeIndexerEndpoint: mockAlgoIndexer.callAlgonodeIndexerEndpoint
     }))
 )
+
+import { aes256encrypt } from './utils/crypto-utils.js'
+
+jest.mock('./utils/crypto-utils.js', () => ({
+    aes256encrypt: jest.fn().mockImplementation(() => '')
+}))
 
 describe('app', function () {
     const OLD_ENV = process.env
@@ -2228,6 +2238,98 @@ describe('app', function () {
                 error: 'AssetNotFoundError',
                 message: 'Asset specified not found'
             })
+        })
+    })
+
+    describe('post readings endpoint', function () {
+        it('should return 201 when posting new reading and all is fine', async () => {
+            mockStdlib.newAccountFromMnemonic.mockImplementation(() => ({
+                networkAccount: { addr: 'wallet_address' }
+            }))
+
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user_id',
+                permissions: [0]
+            }))
+
+            aes256encrypt.mockImplementation(() => ({ iv: 'enc-iv', encryptedData: 'end-data' }))
+
+            mockStdlib.getProvider.mockImplementation(() =>
+                Promise.resolve({
+                    algodClient: {
+                        getTransactionParams: () => ({ do: async () => Promise.resolve({ param: 'txn_param' }) }),
+                        sendRawTransaction: () => ({ do: async () => Promise.resolve({ txId: 'txn_id' }) })
+                    }
+                })
+            )
+
+            const mockSignedTnx = jest.fn().mockImplementation(() => 'signed_txn')
+
+            mockStdlib.makePaymentTxnWithSuggestedParamsFromObject.mockImplementation(() => ({
+                signTxn: mockSignedTnx
+            }))
+
+            const response = await request(app.callback()).post('/readings').send({
+                trackerId: 'tracker_id',
+                value: '12345',
+                unit: 'kwh'
+            })
+
+            expect(aes256encrypt).toHaveBeenCalledTimes(1)
+            expect(aes256encrypt).toHaveBeenCalledWith('12345')
+
+            expect(mockTrackerRepository.createReading).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.createReading).toHaveBeenCalledWith({
+                encryptionIV: 'enc-iv',
+                id: 'txn_id',
+                isAdmin: true,
+                trackerId: 'tracker_id',
+                userId: 'user_id'
+            })
+
+            expect(response.status).toBe(201)
+            expect(response.body).toEqual({
+                id: 'txn_id'
+            })
+        })
+    })
+
+    it('should return 400 when reading trackerId is missing', async () => {
+        const response = await request(app.callback()).post('/readings').send({
+            value: '12345',
+            unit: 'kwh'
+        })
+
+        expect(response.status).toBe(400)
+        expect(response.body).toEqual({
+            error: 'MissingParameterError',
+            message: 'trackerId must be specified'
+        })
+    })
+
+    it('should return 400 when reading value is missing', async () => {
+        const response = await request(app.callback()).post('/readings').send({
+            trackerId: '12345',
+            unit: 'kwh'
+        })
+
+        expect(response.status).toBe(400)
+        expect(response.body).toEqual({
+            error: 'MissingParameterError',
+            message: 'value must be specified'
+        })
+    })
+
+    it('should return 400 when reading unit is missing', async () => {
+        const response = await request(app.callback()).post('/readings').send({
+            trackerId: '12345',
+            value: '14'
+        })
+
+        expect(response.status).toBe(400)
+        expect(response.body).toEqual({
+            error: 'MissingParameterError',
+            message: 'unit must be specified'
         })
     })
 })

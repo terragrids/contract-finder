@@ -23,6 +23,7 @@ import { mintToken } from './utils/token-minter.js'
 import { getTokenWithUserInfo } from './utils/token-info.js'
 import InvalidTrackerError from './error/invalid-tracker.error.js'
 import { makeZeroTransactionToSelf } from './utils/transaction-maker.js'
+import { aes256encrypt } from './utils/crypto-utils.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -254,7 +255,6 @@ router.get('/trackers/:tokenId', async ctx => {
     }
 })
 
-/* istanbul ignore next */
 router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
     if (!ctx.request.body.trackerId) throw new MissingParameterError('trackerId')
     if (!ctx.request.body.value) throw new MissingParameterError('value')
@@ -264,7 +264,8 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
     const [algoAccount, user] = await Promise.all([stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
 
     // Make reading transaction
-    const note = { trackerId: ctx.request.body.trackerId, value: ctx.request.body.value, unit: ctx.request.body.unit, encryption: 'plaintext' }
+    const { iv, encryptedData } = aes256encrypt(ctx.request.body.value)
+    const note = { type: 'terragrids-reading', trackerId: ctx.request.body.trackerId, value: encryptedData, unit: ctx.request.body.unit, encryption: 'aes256' }
     const { id } = await makeZeroTransactionToSelf(stdlib, algoAccount, note)
 
     // Save reading off-chain
@@ -272,6 +273,7 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
         id,
         trackerId: ctx.request.body.trackerId,
         userId: user.id,
+        encryptionIV: iv,
         isAdmin: user.permissions.includes(0)
     })
 
