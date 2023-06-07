@@ -17,10 +17,12 @@ import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-ut
 import jwtAuthorize from './middleware/jwt-authorize.js'
 import UserRepository from './repository/user.repository.js'
 import { TypePositiveOrZeroNumberError } from './error/type-positive-number.error.js'
-import { isPositiveOrZeroNumber } from './utils/validators.js'
+import { isPositiveOrZeroNumber, isValidTrackerType } from './utils/validators.js'
 import TrackerRepository from './repository/tracker.repository.js'
 import { mintToken } from './utils/token-minter.js'
 import { getTokenWithUserInfo } from './utils/token-info.js'
+import InvalidTrackerError from './error/invalid-tracker.error.js'
+import { makeZeroTransactionToSelf } from './utils/transaction-maker.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -205,6 +207,7 @@ router.post('/trackers', jwtAuthorize, bodyParser(), async ctx => {
     if (ctx.request.body.name.length > 128) throw new ParameterTooLongError('name')
     if (ctx.request.body.type.length > 128) throw new ParameterTooLongError('type')
     if (ctx.request.body.offChainImageUrl && ctx.request.body.offChainImageUrl.length > 128) throw new ParameterTooLongError('offChainImageUrl')
+    if (!isValidTrackerType(ctx.request.body.type)) throw new InvalidTrackerError()
 
     const stdlib = new ReachProvider().getStdlib()
     const [algoAccount, user] = await Promise.all([stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
@@ -219,7 +222,8 @@ router.post('/trackers', jwtAuthorize, bodyParser(), async ctx => {
         placeId: ctx.request.body.placeId,
         name: ctx.request.body.name,
         type: ctx.request.body.type,
-        offChainImageUrl: ctx.request.body.offChainImageUrl
+        offChainImageUrl: ctx.request.body.offChainImageUrl,
+        isAdmin: user.permissions.includes(0)
     })
 
     ctx.body = { tokenId }
@@ -248,6 +252,31 @@ router.get('/trackers/:tokenId', async ctx => {
         ...tracker,
         ...tokenInfo
     }
+})
+
+/* istanbul ignore next */
+router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
+    if (!ctx.request.body.trackerId) throw new MissingParameterError('trackerId')
+    if (!ctx.request.body.value) throw new MissingParameterError('value')
+    if (!ctx.request.body.unit) throw new MissingParameterError('unit')
+
+    const stdlib = new ReachProvider().getStdlib()
+    const [algoAccount, user] = await Promise.all([stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
+
+    // Make reading transaction
+    const note = { trackerId: ctx.request.body.trackerId, value: ctx.request.body.value, unit: ctx.request.body.unit, encryption: 'plaintext' }
+    const { id } = await makeZeroTransactionToSelf(stdlib, algoAccount, note)
+
+    // Save reading off-chain
+    await new TrackerRepository().createReading({
+        id,
+        trackerId: ctx.request.body.trackerId,
+        userId: user.id,
+        isAdmin: user.permissions.includes(0)
+    })
+
+    ctx.body = { id }
+    ctx.status = 201
 })
 
 app.use(requestLogger).use(errorHandler).use(router.routes()).use(router.allowedMethods())

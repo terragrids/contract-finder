@@ -240,4 +240,17 @@ export default class DynamoDbRepository {
             }
         }
     }
+
+    checkTrackerBelongsToUser(tokenId, userId) {
+        return {
+            ConditionCheck: {
+                TableName: this.table,
+                Key: { pk: { S: `tracker|${tokenId}` } },
+                ConditionExpression: 'userId = :user',
+                ExpressionAttributeValues: {
+                    ':user': { S: userId }
+                }
+            }
+        }
+    }
 }

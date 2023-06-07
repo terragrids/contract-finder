@@ -1457,12 +1457,13 @@ describe('app', function () {
             }))
 
             mockUserRepository.getUserByOauthId.mockImplementation(() => ({
-                id: 'user_id'
+                id: 'user_id',
+                permissions: [0]
             }))
 
             const response = await request(app.callback()).post('/trackers').send({
                 name: 'tracker name',
-                type: 'tracker type',
+                type: 'electricity-meter',
                 cid: 'tracker cid',
                 placeId: 'place id',
                 offChainImageUrl: 'image url'
@@ -1483,10 +1484,11 @@ describe('app', function () {
             expect(mockTrackerRepository.createTracker).toHaveBeenCalledWith({
                 userId: 'user_id',
                 name: 'tracker name',
-                type: 'tracker type',
+                type: 'electricity-meter',
                 offChainImageUrl: 'image url',
                 tokenId: 1234,
-                placeId: 'place id'
+                placeId: 'place id',
+                isAdmin: true
             })
 
             expect(response.status).toBe(201)
@@ -1508,12 +1510,13 @@ describe('app', function () {
             }))
 
             mockUserRepository.getUserByOauthId.mockImplementation(() => ({
-                id: 'user_id'
+                id: 'user_id',
+                permissions: [1]
             }))
 
             const response = await request(app.callback()).post('/trackers').send({
                 name: 'Louisville and Nashville Railroad Office Building',
-                type: 'tracker type',
+                type: 'gas-meter',
                 cid: 'tracker cid',
                 creator: 'tracker user',
                 offChainImageUrl: 'image url',
@@ -1535,10 +1538,11 @@ describe('app', function () {
             expect(mockTrackerRepository.createTracker).toHaveBeenCalledWith({
                 userId: 'user_id',
                 name: 'Louisville and Nashville Railroad Office Building',
-                type: 'tracker type',
+                type: 'gas-meter',
                 offChainImageUrl: 'image url',
                 tokenId: 1234,
-                placeId: 'place id'
+                placeId: 'place id',
+                isAdmin: false
             })
 
             expect(response.status).toBe(201)
@@ -1554,7 +1558,7 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/trackers').send({
                 name: 'tracker name',
-                type: 'tracker type',
+                type: 'gas-meter',
                 cid: 'tracker cid',
                 offChainImageUrl: 'image url',
                 placeId: 'place id'
@@ -1573,7 +1577,7 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/trackers').send({
                 name: 'tracker name',
-                type: 'tracker type',
+                type: 'electricity-meter',
                 cid: 'tracker cid',
                 offChainImageUrl: 'image url',
                 placeId: 'place id'
@@ -1604,7 +1608,7 @@ describe('app', function () {
 
             const response = await request(app.callback()).post('/trackers').send({
                 name: 'tracker name',
-                type: 'tracker type',
+                type: 'gas-meter',
                 cid: 'tracker cid',
                 offChainImageUrl: 'image url',
                 placeId: 'place id'
@@ -1641,6 +1645,22 @@ describe('app', function () {
             expect(response.body).toEqual({
                 error: 'MissingParameterError',
                 message: 'type must be specified'
+            })
+        })
+
+        it('should return 400 when tracker type is invalid', async () => {
+            const response = await request(app.callback()).post('/trackers').send({
+                name: 'tracker name',
+                type: 'tracker type',
+                cid: 'tracker cid',
+                offChainImageUrl: 'image url',
+                placeId: 'place id'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'InvalidTrackerError',
+                message: 'Invalid tracker type'
             })
         })
 

@@ -4,10 +4,11 @@ import TrackerNotFoundError from '../error/tracker-not-found.error.js'
 
 export default class TrackerRepository extends DynamoDbRepository {
     trackerPrefix = 'tracker'
+    readingPrefix = 'reading'
     placePrefix = 'place'
     itemName = 'tracker'
 
-    async createTracker({ tokenId, userId, placeId, type, name, offChainImageUrl }) {
+    async createTracker({ tokenId, userId, placeId, type, name, offChainImageUrl, isAdmin }) {
         const now = Date.now()
 
         return await this.put({
@@ -22,7 +23,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                 offChainImageUrl: { S: offChainImageUrl }
             },
             itemLogName: this.itemName,
-            transactionConditions: [this.checkPlaceBelongsToUser(placeId, userId)]
+            ...(!isAdmin && { transactionConditions: [this.checkPlaceBelongsToUser(placeId, userId)] })
         })
     }
 
@@ -97,5 +98,22 @@ export default class TrackerRepository extends DynamoDbRepository {
             if (e instanceof ConditionalCheckFailedException) throw new TrackerNotFoundError()
             else throw e
         }
+    }
+
+    async createReading({ id, trackerId, userId, isAdmin }) {
+        const now = Date.now()
+
+        return await this.put({
+            item: {
+                pk: { S: `${this.readingPrefix}|${id}` },
+                gsi1pk: { S: `${this.trackerPrefix}|${trackerId}` },
+                gsi2pk: { S: `type|${this.readingPrefix}` },
+                data: { S: `${this.readingPrefix}|active|${now}` },
+                userId: { S: userId },
+                created: { N: now.toString() }
+            },
+            itemLogName: this.itemName,
+            ...(!isAdmin && { transactionConditions: [this.checkTrackerBelongsToUser(trackerId, userId)] })
+        })
     }
 }
