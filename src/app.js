@@ -23,7 +23,9 @@ import { mintToken } from './utils/token-minter.js'
 import { getTokenWithUserInfo } from './utils/token-info.js'
 import InvalidTrackerError from './error/invalid-tracker.error.js'
 import { makeZeroTransactionToSelf } from './utils/transaction-maker.js'
-import { aes256encrypt } from './utils/crypto-utils.js'
+import { aes256decrypt, aes256encrypt } from './utils/crypto-utils.js'
+import AlgoIndexer from './network/algo-indexer.js'
+import ReadingNotFoundError from './error/reading-not-found.error.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -279,6 +281,57 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
 
     ctx.body = { id }
     ctx.status = 201
+})
+
+router.get('/trackers/:tokenId/readings', async ctx => {
+    const repositoryResponse = await new TrackerRepository().getReadings({
+        trackerId: ctx.params.tokenId,
+        sort: ctx.request.query.sort,
+        status: ctx.request.query.status,
+        pageSize: ctx.request.query.pageSize,
+        nextPageKey: ctx.request.query.nextPageKey
+    })
+
+    const promises = []
+    const indexer = new AlgoIndexer()
+    for (const reading of repositoryResponse.readings) {
+        promises.push(
+            (async () => {
+                const response = await indexer.callAlgonodeIndexerEndpoint(`transactions/${reading.id}`)
+                if (!response || response.status !== 200) {
+                    return null
+                }
+                if (response.json.transaction.note) {
+                    try {
+                        var note = JSON.parse(Buffer.from(response.json.transaction.note, 'base64'))
+                        const value = note.encryption === 'aes256' ? aes256decrypt(note.value, reading.iv) : note.value
+                        return { ...reading, iv: undefined, value, unit: note.unit }
+                    } catch (e) {
+                        return null
+                    }
+                } else {
+                    return reading
+                }
+            })()
+        )
+    }
+
+    const readings = await Promise.all(promises)
+
+    ctx.body = { readings: readings.filter(reading => reading !== null) }
+    ctx.status = 200
+})
+
+router.get('/readings/:txnId', async ctx => {
+    const [reading, txnResponse] = await Promise.all([new TrackerRepository().getReading(ctx.params.txnId), new AlgoIndexer().callAlgonodeIndexerEndpoint(`transactions/${ctx.params.txnId}`)])
+    if (!txnResponse || txnResponse.status !== 200) {
+        throw new ReadingNotFoundError()
+    }
+
+    var note = JSON.parse(Buffer.from(txnResponse.json.transaction.note, 'base64'))
+    const value = note.encryption === 'aes256' ? aes256decrypt(note.value, reading.iv) : note.value
+    ctx.body = { ...reading, iv: undefined, value, unit: note.unit }
+    ctx.status = 200
 })
 
 app.use(requestLogger).use(errorHandler).use(router.routes()).use(router.allowedMethods())

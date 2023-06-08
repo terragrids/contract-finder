@@ -1,6 +1,7 @@
 import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb'
 import DynamoDbRepository from './dynamodb.repository.js'
 import TrackerNotFoundError from '../error/tracker-not-found.error.js'
+import ReadingNotFoundError from '../error/reading-not-found.error.js'
 
 export default class TrackerRepository extends DynamoDbRepository {
     trackerPrefix = 'tracker'
@@ -111,10 +112,74 @@ export default class TrackerRepository extends DynamoDbRepository {
                 data: { S: `${this.readingPrefix}|active|${now}` },
                 userId: { S: userId },
                 created: { N: now.toString() },
-                encryptionIV: { S: encryptionIV }
+                hash: { S: encryptionIV }
             },
             itemLogName: this.itemName,
             ...(!isAdmin && { transactionConditions: [this.checkTrackerBelongsToUser(trackerId, userId)] })
         })
+    }
+
+    async getReadings({ trackerId, status, sort, pageSize, nextPageKey }) {
+        const forward = sort && sort === 'desc' ? false : true
+        let condition = 'gsi1pk = :gsi1pk'
+        let filter
+
+        if (status) {
+            condition = `${condition} AND begins_with(#data, :filter)`
+            filter = `${this.readingPrefix}|${status}`
+        }
+
+        const data = await this.query({
+            indexName: 'gsi1',
+            conditionExpression: condition,
+            ...(filter && { attributeNames: { '#data': 'data' } }),
+            attributeValues: {
+                ':gsi1pk': { S: `${this.trackerPrefix}|${trackerId}` },
+                ...(filter && { ':filter': { S: filter } })
+            },
+            pageSize,
+            nextPageKey,
+            forward
+        })
+
+        return {
+            readings: data.items.map(reading => {
+                const [, status] = reading.data.S.split('|')
+                return {
+                    id: reading.pk.S.replace(`${this.readingPrefix}|`, ''),
+                    trackerId: reading.gsi1pk.S.replace(`${this.trackerPrefix}|`, ''),
+                    status,
+                    created: reading.created.N,
+                    ...(reading.hash && { iv: reading.hash.S })
+                }
+            }),
+            ...(data.nextPageKey && { nextPageKey: data.nextPageKey })
+        }
+    }
+
+    async getReading(id) {
+        try {
+            const data = await this.get({
+                key: { pk: { S: `${this.readingPrefix}|${id}` } },
+                itemLogName: this.itemName
+            })
+
+            if (data.Item) {
+                const [, status, date] = data.Item.data.S.split('|')
+                return {
+                    id: data.Item.pk.S.replace(`${this.readingPrefix}|`, ''),
+                    userId: data.Item.userId?.S,
+                    status,
+                    created: data.Item.created.N,
+                    lastModified: date,
+                    ...(data.Item.hash && { iv: data.Item.hash.S })
+                }
+            }
+
+            throw new ReadingNotFoundError()
+        } catch (e) {
+            if (e instanceof ConditionalCheckFailedException) throw new ReadingNotFoundError()
+            else throw e
+        }
     }
 }

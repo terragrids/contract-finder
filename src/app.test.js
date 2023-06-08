@@ -71,14 +71,18 @@ const mockTrackerRepository = {
     createTracker: jest.fn().mockImplementation(() => jest.fn()),
     getTrackers: jest.fn().mockImplementation(() => jest.fn()),
     getTracker: jest.fn().mockImplementation(() => jest.fn()),
-    createReading: jest.fn().mockImplementation(() => jest.fn())
+    createReading: jest.fn().mockImplementation(() => jest.fn()),
+    getReadings: jest.fn().mockImplementation(() => jest.fn()),
+    getReading: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/tracker.repository.js', () =>
     jest.fn().mockImplementation(() => ({
         createTracker: mockTrackerRepository.createTracker,
         getTrackers: mockTrackerRepository.getTrackers,
         getTracker: mockTrackerRepository.getTracker,
-        createReading: mockTrackerRepository.createReading
+        createReading: mockTrackerRepository.createReading,
+        getReadings: mockTrackerRepository.getReadings,
+        getReading: mockTrackerRepository.getReading
     }))
 )
 
@@ -116,10 +120,11 @@ jest.mock('./network/algo-indexer.js', () =>
     }))
 )
 
-import { aes256encrypt } from './utils/crypto-utils.js'
+import { aes256encrypt, aes256decrypt } from './utils/crypto-utils.js'
 
 jest.mock('./utils/crypto-utils.js', () => ({
-    aes256encrypt: jest.fn().mockImplementation(() => '')
+    aes256encrypt: jest.fn().mockImplementation(() => ''),
+    aes256decrypt: jest.fn().mockImplementation(() => '')
 }))
 
 describe('app', function () {
@@ -2292,44 +2297,446 @@ describe('app', function () {
                 id: 'txn_id'
             })
         })
+
+        it('should return 400 when reading trackerId is missing', async () => {
+            const response = await request(app.callback()).post('/readings').send({
+                value: '12345',
+                unit: 'kwh'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'trackerId must be specified'
+            })
+        })
+
+        it('should return 400 when reading value is missing', async () => {
+            const response = await request(app.callback()).post('/readings').send({
+                trackerId: '12345',
+                unit: 'kwh'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'value must be specified'
+            })
+        })
+
+        it('should return 400 when reading unit is missing', async () => {
+            const response = await request(app.callback()).post('/readings').send({
+                trackerId: '12345',
+                value: '14'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'unit must be specified'
+            })
+        })
     })
 
-    it('should return 400 when reading trackerId is missing', async () => {
-        const response = await request(app.callback()).post('/readings').send({
-            value: '12345',
-            unit: 'kwh'
+    describe('get readings endpoint', function () {
+        it('should return 200 when getting readings with no encryption', async () => {
+            mockTrackerRepository.getReadings.mockImplementation(() => ({
+                readings: [
+                    {
+                        id: 'id-1',
+                        created: 'reading-date-1'
+                    },
+                    {
+                        id: 'id-2',
+                        created: 'reading-date-2'
+                    },
+                    {
+                        id: 'id-3',
+                        created: 'reading-date-3'
+                    }
+                ]
+            }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(params => {
+                const txnId = params.replace('transactions/', '')
+                if (txnId === 'id-1' || txnId == 'id-2') {
+                    return Promise.resolve({
+                        status: 200,
+                        json: {
+                            transaction: {
+                                index: `txn-${txnId}`,
+                                note: Buffer.from(JSON.stringify({ encryption: 'none', value: 1234, unit: 'kwh' })).toString('base64')
+                            }
+                        }
+                    })
+                } else {
+                    return Promise.resolve({
+                        status: 404
+                    })
+                }
+            })
+
+            const response = await request(app.callback()).get('/trackers/tracking-id/readings?sort=asc&status=active&pageSize=12&nextPageKey=page-key')
+
+            expect(mockTrackerRepository.getReadings).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getReadings).toHaveBeenCalledWith({
+                trackerId: 'tracking-id',
+                nextPageKey: 'page-key',
+                pageSize: '12',
+                sort: 'asc',
+                status: 'active'
+            })
+
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledTimes(3)
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-1')
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-2')
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-3')
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                readings: [
+                    {
+                        id: 'id-1',
+                        value: 1234,
+                        unit: 'kwh',
+                        created: 'reading-date-1'
+                    },
+                    {
+                        id: 'id-2',
+                        value: 1234,
+                        unit: 'kwh',
+                        created: 'reading-date-2'
+                    }
+                ]
+            })
         })
 
-        expect(response.status).toBe(400)
-        expect(response.body).toEqual({
-            error: 'MissingParameterError',
-            message: 'trackerId must be specified'
+        it('should return 200 when getting readings with aes 256 encryption', async () => {
+            mockTrackerRepository.getReadings.mockImplementation(() => ({
+                readings: [
+                    {
+                        id: 'id-1',
+                        created: 'reading-date-1'
+                    },
+                    {
+                        id: 'id-2',
+                        created: 'reading-date-2'
+                    },
+                    {
+                        id: 'id-3',
+                        created: 'reading-date-3'
+                    }
+                ]
+            }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(params => {
+                const txnId = params.replace('transactions/', '')
+                if (txnId === 'id-1' || txnId == 'id-2') {
+                    return Promise.resolve({
+                        status: 200,
+                        json: {
+                            transaction: {
+                                index: `txn-${txnId}`,
+                                note: Buffer.from(JSON.stringify({ encryption: 'aes256', value: 1234, unit: 'kwh' })).toString('base64')
+                            }
+                        }
+                    })
+                } else {
+                    return Promise.resolve({
+                        status: 404
+                    })
+                }
+            })
+
+            aes256decrypt.mockImplementation(() => 'decrypted-value')
+
+            const response = await request(app.callback()).get('/trackers/tracking-id/readings?sort=asc&status=active&pageSize=12&nextPageKey=page-key')
+
+            expect(mockTrackerRepository.getReadings).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getReadings).toHaveBeenCalledWith({
+                trackerId: 'tracking-id',
+                nextPageKey: 'page-key',
+                pageSize: '12',
+                sort: 'asc',
+                status: 'active'
+            })
+
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledTimes(3)
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-1')
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-2')
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-3')
+
+            expect(aes256decrypt).toHaveBeenCalledTimes(2)
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                readings: [
+                    {
+                        id: 'id-1',
+                        value: 'decrypted-value',
+                        unit: 'kwh',
+                        created: 'reading-date-1'
+                    },
+                    {
+                        id: 'id-2',
+                        value: 'decrypted-value',
+                        unit: 'kwh',
+                        created: 'reading-date-2'
+                    }
+                ]
+            })
+        })
+
+        it('should return 200 when getting readings with no note', async () => {
+            mockTrackerRepository.getReadings.mockImplementation(() => ({
+                readings: [
+                    {
+                        id: 'id-1',
+                        created: 'reading-date-1'
+                    },
+                    {
+                        id: 'id-2',
+                        created: 'reading-date-2'
+                    },
+                    {
+                        id: 'id-3',
+                        created: 'reading-date-3'
+                    }
+                ]
+            }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(params => {
+                const txnId = params.replace('transactions/', '')
+                if (txnId === 'id-1' || txnId == 'id-2') {
+                    return Promise.resolve({
+                        status: 200,
+                        json: {
+                            transaction: {
+                                index: `txn-${txnId}`,
+                                ...(txnId === 'id-1' && { note: Buffer.from(JSON.stringify({ encryption: 'aes256', value: 1234, unit: 'kwh' })).toString('base64') })
+                            }
+                        }
+                    })
+                } else {
+                    return Promise.resolve({
+                        status: 404
+                    })
+                }
+            })
+
+            aes256decrypt.mockImplementation(() => 'decrypted-value')
+
+            const response = await request(app.callback()).get('/trackers/tracking-id/readings?sort=asc&status=active&pageSize=12&nextPageKey=page-key')
+
+            expect(mockTrackerRepository.getReadings).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getReadings).toHaveBeenCalledWith({
+                trackerId: 'tracking-id',
+                nextPageKey: 'page-key',
+                pageSize: '12',
+                sort: 'asc',
+                status: 'active'
+            })
+
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledTimes(3)
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-1')
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-2')
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-3')
+
+            expect(aes256decrypt).toHaveBeenCalledTimes(1)
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                readings: [
+                    {
+                        id: 'id-1',
+                        value: 'decrypted-value',
+                        unit: 'kwh',
+                        created: 'reading-date-1'
+                    },
+                    {
+                        id: 'id-2',
+                        created: 'reading-date-2'
+                    }
+                ]
+            })
+        })
+
+        it('should return 200 when getting readings with no base 64 note', async () => {
+            mockTrackerRepository.getReadings.mockImplementation(() => ({
+                readings: [
+                    {
+                        id: 'id-1',
+                        created: 'reading-date-1'
+                    },
+                    {
+                        id: 'id-2',
+                        created: 'reading-date-2'
+                    },
+                    {
+                        id: 'id-3',
+                        created: 'reading-date-3'
+                    }
+                ]
+            }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(params => {
+                const txnId = params.replace('transactions/', '')
+                if (txnId === 'id-1' || txnId == 'id-2') {
+                    return Promise.resolve({
+                        status: 200,
+                        json: {
+                            transaction: {
+                                index: `txn-${txnId}`,
+                                ...(txnId === 'id-1' && { note: Buffer.from(JSON.stringify({ encryption: 'aes256', value: 1234, unit: 'kwh' })).toString('base64') }),
+                                ...(txnId === 'id-2' && { note: 'meh' })
+                            }
+                        }
+                    })
+                } else {
+                    return Promise.resolve({
+                        status: 404
+                    })
+                }
+            })
+
+            aes256decrypt.mockImplementation(() => 'decrypted-value')
+
+            const response = await request(app.callback()).get('/trackers/tracking-id/readings?sort=asc&status=active&pageSize=12&nextPageKey=page-key')
+
+            expect(mockTrackerRepository.getReadings).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getReadings).toHaveBeenCalledWith({
+                trackerId: 'tracking-id',
+                nextPageKey: 'page-key',
+                pageSize: '12',
+                sort: 'asc',
+                status: 'active'
+            })
+
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledTimes(3)
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-1')
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-2')
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-3')
+
+            expect(aes256decrypt).toHaveBeenCalledTimes(1)
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                readings: [
+                    {
+                        id: 'id-1',
+                        value: 'decrypted-value',
+                        unit: 'kwh',
+                        created: 'reading-date-1'
+                    }
+                ]
+            })
         })
     })
 
-    it('should return 400 when reading value is missing', async () => {
-        const response = await request(app.callback()).post('/readings').send({
-            trackerId: '12345',
-            unit: 'kwh'
+    describe('get reading endpoint', function () {
+        it('should return 200 when getting reading with non encrypted value', async () => {
+            mockTrackerRepository.getReading.mockImplementation(() => ({
+                id: 'id-1',
+                created: 'creation-date'
+            }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
+                return Promise.resolve({
+                    status: 200,
+                    json: {
+                        transaction: {
+                            index: 'txn-1',
+                            note: Buffer.from(JSON.stringify({ encryption: 'none', value: 1234, unit: 'kwh' })).toString('base64')
+                        }
+                    }
+                })
+            })
+
+            const response = await request(app.callback()).get('/readings/id-1')
+
+            expect(mockTrackerRepository.getReading).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getReading).toHaveBeenCalledWith('id-1')
+
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledTimes(1)
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-1')
+
+            expect(aes256decrypt).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                id: 'id-1',
+                value: 1234,
+                unit: 'kwh',
+                created: 'creation-date'
+            })
         })
 
-        expect(response.status).toBe(400)
-        expect(response.body).toEqual({
-            error: 'MissingParameterError',
-            message: 'value must be specified'
-        })
-    })
+        it('should return 200 when getting reading with encrypted value', async () => {
+            mockTrackerRepository.getReading.mockImplementation(() => ({
+                id: 'id-1',
+                created: 'creation-date'
+            }))
 
-    it('should return 400 when reading unit is missing', async () => {
-        const response = await request(app.callback()).post('/readings').send({
-            trackerId: '12345',
-            value: '14'
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
+                return Promise.resolve({
+                    status: 200,
+                    json: {
+                        transaction: {
+                            index: 'txn-1',
+                            note: Buffer.from(JSON.stringify({ encryption: 'aes256', value: 1234, unit: 'kwh' })).toString('base64')
+                        }
+                    }
+                })
+            })
+
+            aes256decrypt.mockImplementation(() => 'decrypted-value')
+
+            const response = await request(app.callback()).get('/readings/id-1')
+
+            expect(mockTrackerRepository.getReading).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getReading).toHaveBeenCalledWith('id-1')
+
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledTimes(1)
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-1')
+
+            expect(aes256decrypt).toHaveBeenCalledTimes(1)
+
+            expect(response.status).toBe(200)
+            expect(response.body).toEqual({
+                id: 'id-1',
+                value: 'decrypted-value',
+                unit: 'kwh',
+                created: 'creation-date'
+            })
         })
 
-        expect(response.status).toBe(400)
-        expect(response.body).toEqual({
-            error: 'MissingParameterError',
-            message: 'unit must be specified'
+        it('should return 404 when reading not found', async () => {
+            mockTrackerRepository.getReading.mockImplementation(() => ({
+                id: 'id-1',
+                created: 'creation-date'
+            }))
+
+            mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(() => {
+                return Promise.resolve({
+                    status: 404
+                })
+            })
+
+            const response = await request(app.callback()).get('/readings/id-1')
+
+            expect(mockTrackerRepository.getReading).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getReading).toHaveBeenCalledWith('id-1')
+
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledTimes(1)
+            expect(mockAlgoIndexer.callAlgonodeIndexerEndpoint).toHaveBeenCalledWith('transactions/id-1')
+
+            expect(aes256decrypt).not.toHaveBeenCalled()
+
+            expect(response.status).toBe(404)
+            expect(response.body).toEqual({
+                error: 'ReadingNotFoundError',
+                message: 'Reading specified not found'
+            })
         })
     })
 })
