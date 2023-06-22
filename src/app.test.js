@@ -71,6 +71,7 @@ const mockTrackerRepository = {
     createTracker: jest.fn().mockImplementation(() => jest.fn()),
     getTrackers: jest.fn().mockImplementation(() => jest.fn()),
     getTracker: jest.fn().mockImplementation(() => jest.fn()),
+    updateTracker: jest.fn().mockImplementation(() => jest.fn()),
     createReading: jest.fn().mockImplementation(() => jest.fn()),
     getReadings: jest.fn().mockImplementation(() => jest.fn()),
     getReading: jest.fn().mockImplementation(() => jest.fn())
@@ -80,6 +81,7 @@ jest.mock('./repository/tracker.repository.js', () =>
         createTracker: mockTrackerRepository.createTracker,
         getTrackers: mockTrackerRepository.getTrackers,
         getTracker: mockTrackerRepository.getTracker,
+        updateTracker: mockTrackerRepository.updateTracker,
         createReading: mockTrackerRepository.createReading,
         getReadings: mockTrackerRepository.getReadings,
         getReading: mockTrackerRepository.getReading
@@ -2242,6 +2244,110 @@ describe('app', function () {
             expect(response.body).toEqual({
                 error: 'AssetNotFoundError',
                 message: 'Asset specified not found'
+            })
+        })
+    })
+
+    describe('update tracker endpoint', function () {
+        it('should return 204 when admin updates trackers properties and all is fine', async () => {
+            const tokenId = '1234'
+
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user-id-1',
+                permissions: [0]
+            }))
+
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id-2'
+            }))
+
+            const response = await request(app.callback()).put(`/trackers/${tokenId}`).send({
+                utilityAccountId: 'account-id',
+                utilityAccountApiKey: 'account-api-key'
+            })
+
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledWith('jwt_sub')
+
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
+
+            expect(mockTrackerRepository.updateTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.updateTracker).toHaveBeenCalledWith({
+                tokenId: tokenId,
+                utilityAccountId: 'account-id',
+                utilityAccountApiKey: 'account-api-key'
+            })
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
+        it('should return 204 when non admin updates their own trackers properties', async () => {
+            const tokenId = '1234'
+
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user-id-1',
+                permissions: []
+            }))
+
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id-1'
+            }))
+
+            const response = await request(app.callback()).put(`/trackers/${tokenId}`).send({
+                utilityAccountId: 'account-id',
+                utilityAccountApiKey: 'account-api-key'
+            })
+
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledWith('jwt_sub')
+
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
+
+            expect(mockTrackerRepository.updateTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.updateTracker).toHaveBeenCalledWith({
+                tokenId: tokenId,
+                utilityAccountId: 'account-id',
+                utilityAccountApiKey: 'account-api-key'
+            })
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
+        it('should return 204 when non admin updates others trackers properties', async () => {
+            const tokenId = '1234'
+
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user-id-1',
+                permissions: []
+            }))
+
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id-2'
+            }))
+
+            const response = await request(app.callback()).put(`/trackers/${tokenId}`).send({
+                utilityAccountId: 'account-id',
+                utilityAccountApiKey: 'account-api-key'
+            })
+
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledWith('jwt_sub')
+
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
+
+            expect(mockTrackerRepository.updateTracker).not.toHaveBeenCalled()
+            expect(response.status).toBe(403)
+            expect(response.body).toEqual({
+                error: 'UserUnauthorizedError',
+                message: 'The authenticated user is not authorized to perform this action'
             })
         })
     })

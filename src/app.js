@@ -257,6 +257,23 @@ router.get('/trackers/:tokenId', async ctx => {
     }
 })
 
+router.put('/trackers/:tokenId', jwtAuthorize, bodyParser(), async ctx => {
+    const trackerRepository = new TrackerRepository()
+    const [tracker, user] = await Promise.all([trackerRepository.getTracker(ctx.params.tokenId), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
+
+    const isAdmin = user.permissions.includes(0)
+
+    if (!isAdmin && user.id !== tracker.userId) throw new UserUnauthorizedError()
+
+    await trackerRepository.updateTracker({
+        tokenId: ctx.params.tokenId,
+        utilityAccountId: ctx.request.body.utilityAccountId,
+        utilityAccountApiKey: ctx.request.body.utilityAccountApiKey
+    })
+
+    ctx.status = 204
+})
+
 router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
     if (!ctx.request.body.trackerId) throw new MissingParameterError('trackerId')
     if (!ctx.request.body.value) throw new MissingParameterError('value')
