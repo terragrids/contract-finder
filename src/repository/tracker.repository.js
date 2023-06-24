@@ -89,6 +89,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                     status,
                     type,
                     offChainImageUrl: data.Item.offChainImageUrl.S,
+                    ...(data.Item.utilityName && { utilityName: data.Item.utilityName.S }),
                     ...(data.Item.utilityAccountId && { utilityAccountId: data.Item.utilityAccountId.S }),
                     ...(withApiKey && data.Item.utilityAccountApiKey && { utilityAccountApiKey: data.Item.utilityAccountApiKey.S }),
                     created: data.Item.created.N,
@@ -103,12 +104,13 @@ export default class TrackerRepository extends DynamoDbRepository {
         }
     }
 
-    async updateTracker({ tokenId, utilityAccountId, utilityAccountApiKey }) {
+    async updateTracker({ tokenId, utilityName, utilityAccountId, utilityAccountApiKey }) {
         try {
             const now = Date.now()
             await this.update({
                 key: { pk: { S: `${this.trackerPrefix}|${tokenId}` } },
                 attributes: {
+                    ...(utilityName && { utilityName: { S: utilityName } }),
                     ...(utilityAccountId && { utilityAccountId: { S: utilityAccountId } }),
                     ...(utilityAccountApiKey && { utilityAccountApiKey: { S: utilityAccountApiKey } }),
                     lastModified: { N: now.toString() }

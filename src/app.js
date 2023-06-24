@@ -267,6 +267,7 @@ router.put('/trackers/:tokenId', jwtAuthorize, bodyParser(), async ctx => {
 
     await trackerRepository.updateTracker({
         tokenId: ctx.params.tokenId,
+        utilityName: ctx.request.body.utilityName,
         utilityAccountId: ctx.request.body.utilityAccountId,
         utilityAccountApiKey: ctx.request.body.utilityAccountApiKey
     })

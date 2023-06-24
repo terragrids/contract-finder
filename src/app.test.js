@@ -2263,6 +2263,7 @@ describe('app', function () {
             }))
 
             const response = await request(app.callback()).put(`/trackers/${tokenId}`).send({
+                utilityName: 'utility-name',
                 utilityAccountId: 'account-id',
                 utilityAccountApiKey: 'account-api-key'
             })
@@ -2276,6 +2277,7 @@ describe('app', function () {
             expect(mockTrackerRepository.updateTracker).toHaveBeenCalledTimes(1)
             expect(mockTrackerRepository.updateTracker).toHaveBeenCalledWith({
                 tokenId: tokenId,
+                utilityName: 'utility-name',
                 utilityAccountId: 'account-id',
                 utilityAccountApiKey: 'account-api-key'
             })
