@@ -26,6 +26,8 @@ import { makeZeroTransactionToSelf } from './utils/transaction-maker.js'
 import { aes256decrypt, aes256encrypt } from './utils/crypto-utils.js'
 import AlgoIndexer from './network/algo-indexer.js'
 import ReadingNotFoundError from './error/reading-not-found.error.js'
+import { UtilityAccountNotFound } from './error/utility-account-not-found.js'
+import OctopusEnergyApi from './network/octopus-energy-api.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -337,6 +339,46 @@ router.get('/trackers/:tokenId/readings', async ctx => {
     const readings = await Promise.all(promises)
 
     ctx.body = { readings: readings.filter(reading => reading !== null) }
+    ctx.status = 200
+})
+
+/* istanbul ignore next */
+router.get('/trackers/:tokenId/utility/meters', jwtAuthorize, async ctx => {
+    const trackerRepository = new TrackerRepository()
+    const [tracker, user] = await Promise.all([trackerRepository.getTracker(ctx.params.tokenId, true), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
+
+    const isAdmin = user.permissions.includes(0)
+
+    if (!isAdmin && user.id !== tracker.userId) throw new UserUnauthorizedError()
+    if (!tracker.utilityAccountId || !tracker.utilityAccountApiKey) throw new UtilityAccountNotFound()
+
+    const response = await new OctopusEnergyApi().callOctopusEnergyApiEndpoint(`accounts/${tracker.utilityAccountId}`, tracker.utilityAccountApiKey)
+
+    if (response.status !== 200 || !response.json.properties) throw new UtilityAccountNotFound()
+
+    const electricityMeterPoints = []
+    const gasMeterPoints = []
+
+    response.json.properties.forEach(prop => {
+        electricityMeterPoints.push(
+            prop.electricity_meter_points.map(point => ({
+                mpan: point.mpan,
+                meters: point.meters.map(meter => ({ serialNumber: meter['serial_number'] }))
+            }))
+        )
+
+        gasMeterPoints.push(
+            prop.gas_meter_points.map(point => ({
+                mprn: point.mprn,
+                meters: point.meters.map(meter => ({ serialNumber: meter['serial_number'] }))
+            }))
+        )
+    })
+
+    ctx.body = {
+        electricityMeterPoints,
+        gasMeterPoints
+    }
     ctx.status = 200
 })
 
