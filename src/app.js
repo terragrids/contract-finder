@@ -361,14 +361,14 @@ router.get('/trackers/:tokenId/utility/meters', jwtAuthorize, async ctx => {
 
     response.json.properties.forEach(prop => {
         electricityMeterPoints.push(
-            prop.electricity_meter_points.map(point => ({
+            ...prop.electricity_meter_points.map(point => ({
                 mpan: point.mpan,
                 meters: point.meters.map(meter => ({ serialNumber: meter['serial_number'] }))
             }))
         )
 
         gasMeterPoints.push(
-            prop.gas_meter_points.map(point => ({
+            ...prop.gas_meter_points.map(point => ({
                 mprn: point.mprn,
                 meters: point.meters.map(meter => ({ serialNumber: meter['serial_number'] }))
             }))
