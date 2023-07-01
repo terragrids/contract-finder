@@ -271,7 +271,10 @@ router.put('/trackers/:tokenId', jwtAuthorize, bodyParser(), async ctx => {
         tokenId: ctx.params.tokenId,
         utilityName: ctx.request.body.utilityName,
         utilityAccountId: ctx.request.body.utilityAccountId,
-        utilityAccountApiKey: ctx.request.body.utilityAccountApiKey
+        utilityAccountApiKey: ctx.request.body.utilityAccountApiKey,
+        meterMpan: ctx.request.body.meterMpan,
+        meterMprn: ctx.request.body.meterMprn,
+        meterSerialNumber: ctx.request.body.meterSerialNumber
     })
 
     ctx.status = 204

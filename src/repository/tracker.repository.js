@@ -92,6 +92,9 @@ export default class TrackerRepository extends DynamoDbRepository {
                     ...(data.Item.utilityName && { utilityName: data.Item.utilityName.S }),
                     ...(data.Item.utilityAccountId && { utilityAccountId: data.Item.utilityAccountId.S }),
                     ...(withApiKey && data.Item.utilityAccountApiKey && { utilityAccountApiKey: data.Item.utilityAccountApiKey.S }),
+                    ...(data.Item.meterMpan && { meterMpan: data.Item.meterMpan.S }),
+                    ...(data.Item.meterMprn && { meterMprn: data.Item.meterMprn.S }),
+                    ...(data.Item.meterSerialNumber && { meterSerialNumber: data.Item.meterSerialNumber.S }),
                     created: data.Item.created.N,
                     lastModified: date
                 }
@@ -104,7 +107,7 @@ export default class TrackerRepository extends DynamoDbRepository {
         }
     }
 
-    async updateTracker({ tokenId, utilityName, utilityAccountId, utilityAccountApiKey }) {
+    async updateTracker({ tokenId, utilityName, utilityAccountId, utilityAccountApiKey, meterMpan, meterMprn, meterSerialNumber }) {
         try {
             const now = Date.now()
             await this.update({
@@ -113,6 +116,9 @@ export default class TrackerRepository extends DynamoDbRepository {
                     ...(utilityName && { utilityName: { S: utilityName } }),
                     ...(utilityAccountId && { utilityAccountId: { S: utilityAccountId } }),
                     ...(utilityAccountApiKey && { utilityAccountApiKey: { S: utilityAccountApiKey } }),
+                    ...(meterMpan && { meterMpan: { S: meterMpan } }),
+                    ...(meterMprn && { meterMprn: { S: meterMprn } }),
+                    ...(meterSerialNumber && { meterSerialNumber: { S: meterSerialNumber } }),
                     lastModified: { N: now.toString() }
                 },
                 itemLogName: this.itemName

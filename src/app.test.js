@@ -2265,7 +2265,10 @@ describe('app', function () {
             const response = await request(app.callback()).put(`/trackers/${tokenId}`).send({
                 utilityName: 'utility-name',
                 utilityAccountId: 'account-id',
-                utilityAccountApiKey: 'account-api-key'
+                utilityAccountApiKey: 'account-api-key',
+                meterMpan: 'meter-mpan',
+                meterMprn: 'meter-mprn',
+                meterSerialNumber: 'meter-serial-number'
             })
 
             expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledTimes(1)
@@ -2279,7 +2282,10 @@ describe('app', function () {
                 tokenId: tokenId,
                 utilityName: 'utility-name',
                 utilityAccountId: 'account-id',
-                utilityAccountApiKey: 'account-api-key'
+                utilityAccountApiKey: 'account-api-key',
+                meterMpan: 'meter-mpan',
+                meterMprn: 'meter-mprn',
+                meterSerialNumber: 'meter-serial-number'
             })
 
             expect(response.status).toBe(204)
