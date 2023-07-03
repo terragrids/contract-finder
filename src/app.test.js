@@ -72,6 +72,7 @@ const mockTrackerRepository = {
     getTrackers: jest.fn().mockImplementation(() => jest.fn()),
     getTracker: jest.fn().mockImplementation(() => jest.fn()),
     updateTracker: jest.fn().mockImplementation(() => jest.fn()),
+    removeTrackerUtility: jest.fn().mockImplementation(() => jest.fn()),
     createReading: jest.fn().mockImplementation(() => jest.fn()),
     getReadings: jest.fn().mockImplementation(() => jest.fn()),
     getReading: jest.fn().mockImplementation(() => jest.fn())
@@ -82,6 +83,7 @@ jest.mock('./repository/tracker.repository.js', () =>
         getTrackers: mockTrackerRepository.getTrackers,
         getTracker: mockTrackerRepository.getTracker,
         updateTracker: mockTrackerRepository.updateTracker,
+        removeTrackerUtility: mockTrackerRepository.removeTrackerUtility,
         createReading: mockTrackerRepository.createReading,
         getReadings: mockTrackerRepository.getReadings,
         getReading: mockTrackerRepository.getReading
@@ -2352,6 +2354,96 @@ describe('app', function () {
             expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
 
             expect(mockTrackerRepository.updateTracker).not.toHaveBeenCalled()
+            expect(response.status).toBe(403)
+            expect(response.body).toEqual({
+                error: 'UserUnauthorizedError',
+                message: 'The authenticated user is not authorized to perform this action'
+            })
+        })
+    })
+
+    describe('deleted tracker utility endpoint', function () {
+        it('should return 204 when admin removes trackers utility and all is fine', async () => {
+            const tokenId = '1234'
+
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user-id-1',
+                permissions: [0]
+            }))
+
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id-2'
+            }))
+
+            const response = await request(app.callback()).delete(`/trackers/${tokenId}/utility`)
+
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledWith('jwt_sub')
+
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
+
+            expect(mockTrackerRepository.removeTrackerUtility).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.removeTrackerUtility).toHaveBeenCalledWith(tokenId)
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
+        it('should return 204 when non admin removes their own trackers utility', async () => {
+            const tokenId = '1234'
+
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user-id-1',
+                permissions: []
+            }))
+
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id-1'
+            }))
+
+            const response = await request(app.callback()).delete(`/trackers/${tokenId}/utility`)
+
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledWith('jwt_sub')
+
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
+
+            expect(mockTrackerRepository.removeTrackerUtility).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.removeTrackerUtility).toHaveBeenCalledWith(tokenId)
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
+        it('should return 204 when non admin removes others trackers utility', async () => {
+            const tokenId = '1234'
+
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user-id-1',
+                permissions: []
+            }))
+
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: tokenId,
+                userId: 'user-id-2'
+            }))
+
+            const response = await request(app.callback()).delete(`/trackers/${tokenId}/utility`).send({
+                utilityAccountId: 'account-id',
+                utilityAccountApiKey: 'account-api-key'
+            })
+
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledWith('jwt_sub')
+
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.getTracker).toHaveBeenCalledWith(tokenId)
+
+            expect(mockTrackerRepository.removeTrackerUtility).not.toHaveBeenCalled()
             expect(response.status).toBe(403)
             expect(response.body).toEqual({
                 error: 'UserUnauthorizedError',

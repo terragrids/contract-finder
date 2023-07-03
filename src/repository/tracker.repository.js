@@ -129,6 +129,28 @@ export default class TrackerRepository extends DynamoDbRepository {
         }
     }
 
+    async removeTrackerUtility(tokenId) {
+        try {
+            const now = Date.now()
+            await this.update({
+                key: { pk: { S: `${this.trackerPrefix}|${tokenId}` } },
+                attributes: {
+                    utilityName: { S: '' },
+                    utilityAccountId: { S: '' },
+                    utilityAccountApiKey: { S: '' },
+                    meterMpan: { S: '' },
+                    meterMprn: { S: '' },
+                    meterSerialNumber: { S: '' },
+                    lastModified: { N: now.toString() }
+                },
+                itemLogName: this.itemName
+            })
+        } catch (e) {
+            if (e instanceof ConditionalCheckFailedException) throw new TrackerNotFoundError()
+            else throw e
+        }
+    }
+
     async createReading({ id, trackerId, userId, encryptionIV, isAdmin }) {
         const now = Date.now()
 

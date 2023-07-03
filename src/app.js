@@ -264,7 +264,6 @@ router.put('/trackers/:tokenId', jwtAuthorize, bodyParser(), async ctx => {
     const [tracker, user] = await Promise.all([trackerRepository.getTracker(ctx.params.tokenId), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
 
     const isAdmin = user.permissions.includes(0)
-
     if (!isAdmin && user.id !== tracker.userId) throw new UserUnauthorizedError()
 
     await trackerRepository.updateTracker({
@@ -277,6 +276,17 @@ router.put('/trackers/:tokenId', jwtAuthorize, bodyParser(), async ctx => {
         meterSerialNumber: ctx.request.body.meterSerialNumber
     })
 
+    ctx.status = 204
+})
+
+router.delete('/trackers/:tokenId/utility', jwtAuthorize, async ctx => {
+    const trackerRepository = new TrackerRepository()
+    const [tracker, user] = await Promise.all([trackerRepository.getTracker(ctx.params.tokenId), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
+
+    const isAdmin = user.permissions.includes(0)
+    if (!isAdmin && user.id !== tracker.userId) throw new UserUnauthorizedError()
+
+    await trackerRepository.removeTrackerUtility(ctx.params.tokenId)
     ctx.status = 204
 })
 
