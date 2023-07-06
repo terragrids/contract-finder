@@ -1,6 +1,6 @@
 import GenericError from './generic-error.js'
 
-export class UtilityAccountNotFound extends GenericError {
+export class UtilityAccountNotFoundError extends GenericError {
     httpCode = 404
     message
 
@@ -10,7 +10,7 @@ export class UtilityAccountNotFound extends GenericError {
 
     toJson() {
         return {
-            error: 'UtilityAccountNotFound',
+            error: 'UtilityAccountNotFoundError',
             message: 'No utility account details found'
         }
     }

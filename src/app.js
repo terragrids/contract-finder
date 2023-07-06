@@ -17,7 +17,7 @@ import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-ut
 import jwtAuthorize from './middleware/jwt-authorize.js'
 import UserRepository from './repository/user.repository.js'
 import { TypePositiveOrZeroNumberError } from './error/type-positive-number.error.js'
-import { isPositiveOrZeroNumber, isValidTrackerType } from './utils/validators.js'
+import { isPositiveOrZeroNumber, isValidTrackerType, isValidUtilityMeterPointType } from './utils/validators.js'
 import TrackerRepository from './repository/tracker.repository.js'
 import { mintToken } from './utils/token-minter.js'
 import { getTokenWithUserInfo } from './utils/token-info.js'
@@ -26,8 +26,11 @@ import { makeZeroTransactionToSelf } from './utils/transaction-maker.js'
 import { aes256decrypt, aes256encrypt } from './utils/crypto-utils.js'
 import AlgoIndexer from './network/algo-indexer.js'
 import ReadingNotFoundError from './error/reading-not-found.error.js'
-import { UtilityAccountNotFound } from './error/utility-account-not-found.js'
+import { UtilityAccountNotFoundError } from './error/utility-account-not-found.error.js'
 import OctopusEnergyApi from './network/octopus-energy-api.js'
+import { UtilityPointTypeNotValidError } from './error/utility-point-type-not-valid.error.js'
+import { UtilityMeterConsumptionNotFoundError } from './error/utility-meter-consumption-not-found.error.js'
+import { convertIsoTimeStringToUnixTimestamp, convertUnixTimestampToIsoTimeString } from './utils/string-utils.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -363,11 +366,11 @@ router.get('/trackers/:tokenId/utility/meters', jwtAuthorize, async ctx => {
     const isAdmin = user.permissions.includes(0)
 
     if (!isAdmin && user.id !== tracker.userId) throw new UserUnauthorizedError()
-    if (!tracker.utilityAccountId || !tracker.utilityAccountApiKey) throw new UtilityAccountNotFound()
+    if (!tracker.utilityAccountId || !tracker.utilityAccountApiKey) throw new UtilityAccountNotFoundError()
 
     const response = await new OctopusEnergyApi().callOctopusEnergyApiEndpoint(`accounts/${tracker.utilityAccountId}`, tracker.utilityAccountApiKey)
 
-    if (response.status !== 200 || !response.json.properties) throw new UtilityAccountNotFound()
+    if (response.status !== 200 || !response.json.properties) throw new UtilityAccountNotFoundError()
 
     const electricityMeterPoints = []
     const gasMeterPoints = []
@@ -391,6 +394,50 @@ router.get('/trackers/:tokenId/utility/meters', jwtAuthorize, async ctx => {
     ctx.body = {
         electricityMeterPoints,
         gasMeterPoints
+    }
+    ctx.status = 200
+})
+
+/* istanbul ignore next */
+router.get('/trackers/:tokenId/utility/:pointType/points/:pointId/meters/:serial/consumption', jwtAuthorize, async ctx => {
+    if (!isValidUtilityMeterPointType(ctx.params.pointType)) throw new UtilityPointTypeNotValidError()
+
+    // timestamps must be in milliseconds
+    let { page, periodFrom, periodTo, groupBy, sort } = ctx.request.query
+
+    if (periodFrom) periodFrom = convertUnixTimestampToIsoTimeString(periodFrom)
+    if (periodTo) periodTo = convertUnixTimestampToIsoTimeString(periodTo)
+
+    const trackerRepository = new TrackerRepository()
+    const [tracker, user] = await Promise.all([trackerRepository.getTracker(ctx.params.tokenId, true), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
+
+    const isAdmin = user.permissions.includes(0)
+
+    if (!isAdmin && user.id !== tracker.userId) throw new UserUnauthorizedError()
+
+    if (!tracker.utilityAccountId || !tracker.utilityAccountApiKey) throw new UtilityAccountNotFoundError()
+
+    const response = await new OctopusEnergyApi().callOctopusEnergyApiEndpoint(
+        `${ctx.params.pointType}-meter-points/${ctx.params.pointId}/meters/${ctx.params.serial}/consumption`,
+        tracker.utilityAccountApiKey,
+        {
+            page,
+            ...(periodFrom && { period_from: periodFrom }),
+            ...(periodTo && { period_to: periodTo }),
+            ...(groupBy && { group_by: groupBy }),
+            order_by: sort === 'asc' ? 'period' : undefined
+        }
+    )
+
+    if (response.status !== 200 || !response.json.results) throw new UtilityMeterConsumptionNotFoundError()
+
+    ctx.body = {
+        count: response.json.count,
+        results: response.json.results.map(item => ({
+            consumption: item.consumption,
+            start: convertIsoTimeStringToUnixTimestamp(item.interval_start),
+            end: convertIsoTimeStringToUnixTimestamp(item.interval_end)
+        }))
     }
     ctx.status = 200
 })
