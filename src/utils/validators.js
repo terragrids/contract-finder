@@ -16,6 +16,3 @@ export const isPositiveOrZeroNumber = number => {
 export const isValidTrackerType = type => {
     return type === 'electricity-meter' || type === 'gas-meter'
 }
-export const isValidUtilityMeterPointType = type => {
-    return type === 'electricity' || 'gas'
-}

@@ -17,7 +17,7 @@ import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-ut
 import jwtAuthorize from './middleware/jwt-authorize.js'
 import UserRepository from './repository/user.repository.js'
 import { TypePositiveOrZeroNumberError } from './error/type-positive-number.error.js'
-import { isPositiveOrZeroNumber, isValidTrackerType, isValidUtilityMeterPointType } from './utils/validators.js'
+import { isPositiveOrZeroNumber, isValidTrackerType } from './utils/validators.js'
 import TrackerRepository from './repository/tracker.repository.js'
 import { mintToken } from './utils/token-minter.js'
 import { getTokenWithUserInfo } from './utils/token-info.js'
@@ -28,9 +28,10 @@ import AlgoIndexer from './network/algo-indexer.js'
 import ReadingNotFoundError from './error/reading-not-found.error.js'
 import { UtilityAccountNotFoundError } from './error/utility-account-not-found.error.js'
 import OctopusEnergyApi from './network/octopus-energy-api.js'
-import { UtilityPointTypeNotValidError } from './error/utility-point-type-not-valid.error.js'
 import { UtilityMeterConsumptionNotFoundError } from './error/utility-meter-consumption-not-found.error.js'
 import { convertIsoTimeStringToUnixTimestamp, convertUnixTimestampToIsoTimeString } from './utils/string-utils.js'
+import { UtilityMeterPointNotFoundError } from './error/utility-meter-point-not-found.error.js'
+import { UtilityMeterSerialNotFoundError } from './error/utility-meter-serial-not-found.error.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -399,9 +400,7 @@ router.get('/trackers/:tokenId/utility/meters', jwtAuthorize, async ctx => {
 })
 
 /* istanbul ignore next */
-router.get('/trackers/:tokenId/utility/:pointType/points/:pointId/meters/:serial/consumption', jwtAuthorize, async ctx => {
-    if (!isValidUtilityMeterPointType(ctx.params.pointType)) throw new UtilityPointTypeNotValidError()
-
+router.get('/trackers/:tokenId/utility/consumption', jwtAuthorize, async ctx => {
     // timestamps must be in milliseconds
     let { page, periodFrom, periodTo, groupBy, sort } = ctx.request.query
 
@@ -416,18 +415,25 @@ router.get('/trackers/:tokenId/utility/:pointType/points/:pointId/meters/:serial
     if (!isAdmin && user.id !== tracker.userId) throw new UserUnauthorizedError()
 
     if (!tracker.utilityAccountId || !tracker.utilityAccountApiKey) throw new UtilityAccountNotFoundError()
+    if (!tracker.meterMpan && !tracker.meterMprn) throw new UtilityMeterPointNotFoundError()
+    if (!tracker.meterSerialNumber) throw new UtilityMeterSerialNotFoundError()
 
-    const response = await new OctopusEnergyApi().callOctopusEnergyApiEndpoint(
-        `${ctx.params.pointType}-meter-points/${ctx.params.pointId}/meters/${ctx.params.serial}/consumption`,
-        tracker.utilityAccountApiKey,
-        {
-            page,
-            ...(periodFrom && { period_from: periodFrom }),
-            ...(periodTo && { period_to: periodTo }),
-            ...(groupBy && { group_by: groupBy }),
-            order_by: sort === 'asc' ? 'period' : undefined
-        }
-    )
+    let pointType, pointId
+    if (tracker.meterMpan) {
+        pointType = 'electricity'
+        pointId = tracker.meterMpan
+    } else {
+        pointType = 'gas'
+        pointId = tracker.meterMprn
+    }
+
+    const response = await new OctopusEnergyApi().callOctopusEnergyApiEndpoint(`${pointType}-meter-points/${pointId}/meters/${tracker.meterSerialNumber}/consumption`, tracker.utilityAccountApiKey, {
+        page,
+        ...(periodFrom && { period_from: periodFrom }),
+        ...(periodTo && { period_to: periodTo }),
+        ...(groupBy && { group_by: groupBy }),
+        order_by: sort === 'asc' ? 'period' : undefined
+    })
 
     if (response.status !== 200 || !response.json.results) throw new UtilityMeterConsumptionNotFoundError()
 
