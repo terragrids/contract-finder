@@ -17,7 +17,7 @@ import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-ut
 import jwtAuthorize from './middleware/jwt-authorize.js'
 import UserRepository from './repository/user.repository.js'
 import { TypePositiveOrZeroNumberError } from './error/type-positive-number.error.js'
-import { isPositiveOrZeroNumber, isValidTrackerType } from './utils/validators.js'
+import { isPositiveNumber, isPositiveOrZeroNumber, isValidTrackerType } from './utils/validators.js'
 import TrackerRepository from './repository/tracker.repository.js'
 import { mintToken } from './utils/token-minter.js'
 import { getTokenWithUserInfo } from './utils/token-info.js'
@@ -402,10 +402,11 @@ router.get('/trackers/:tokenId/utility/meters', jwtAuthorize, async ctx => {
 /* istanbul ignore next */
 router.get('/trackers/:tokenId/utility/consumption', jwtAuthorize, async ctx => {
     // timestamps must be in milliseconds
-    let { page, periodFrom, periodTo, groupBy, sort } = ctx.request.query
+    let { page, pageSize, from, to, groupBy, sort } = ctx.request.query
 
-    if (periodFrom) periodFrom = convertUnixTimestampToIsoTimeString(periodFrom)
-    if (periodTo) periodTo = convertUnixTimestampToIsoTimeString(periodTo)
+    if (page && !isPositiveNumber(parseInt(page))) throw new TypePositiveOrZeroNumberError('page')
+    if (from) from = convertUnixTimestampToIsoTimeString(from)
+    if (to) to = convertUnixTimestampToIsoTimeString(to)
 
     const trackerRepository = new TrackerRepository()
     const [tracker, user] = await Promise.all([trackerRepository.getTracker(ctx.params.tokenId, true), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
@@ -429,8 +430,9 @@ router.get('/trackers/:tokenId/utility/consumption', jwtAuthorize, async ctx => 
 
     const response = await new OctopusEnergyApi().callOctopusEnergyApiEndpoint(`${pointType}-meter-points/${pointId}/meters/${tracker.meterSerialNumber}/consumption`, tracker.utilityAccountApiKey, {
         page,
-        ...(periodFrom && { period_from: periodFrom }),
-        ...(periodTo && { period_to: periodTo }),
+        page_size: pageSize,
+        ...(from && { period_from: from }),
+        ...(to && { period_to: to }),
         ...(groupBy && { group_by: groupBy }),
         order_by: sort === 'asc' ? 'period' : undefined
     })
@@ -439,11 +441,12 @@ router.get('/trackers/:tokenId/utility/consumption', jwtAuthorize, async ctx => 
 
     ctx.body = {
         count: response.json.count,
-        results: response.json.results.map(item => ({
+        consumptions: response.json.results.map(item => ({
             consumption: item.consumption,
             start: convertIsoTimeStringToUnixTimestamp(item.interval_start),
             end: convertIsoTimeStringToUnixTimestamp(item.interval_end)
-        }))
+        })),
+        nextPage: !page ? 2 : parseInt(page) + 1
     }
     ctx.status = 200
 })

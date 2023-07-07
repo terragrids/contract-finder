@@ -8,6 +8,11 @@ export const isNumberOrUndef = number => {
     return isNumber(number)
 }
 
+export const isPositiveNumber = number => {
+    if (isNumber(number) && number > 0) return true
+    else return false
+}
+
 export const isPositiveOrZeroNumber = number => {
     if (isNumber(number) && number >= 0) return true
     else return false
