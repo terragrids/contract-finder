@@ -1,3 +1,5 @@
+import { TypePositiveNumberError } from '../error/type-positive-number.error copy.js'
+
 export const isNumber = number => {
     if (isNaN(number) || typeof number !== 'number') return false
     else return true
@@ -20,4 +22,14 @@ export const isPositiveOrZeroNumber = number => {
 
 export const isValidTrackerType = type => {
     return type === 'electricity-meter' || type === 'gas-meter'
+}
+
+export const getPositiveNumberOrDefault = (value, defaultValue) => {
+    if (value) {
+        const n = parseInt(value)
+        if (!isPositiveNumber(n)) throw new TypePositiveNumberError()
+        return n
+    } else {
+        return defaultValue
+    }
 }

@@ -16,8 +16,8 @@ import { UserUnauthorizedError } from './error/user-unauthorized-error.js'
 import { algorandAddressFromCID, cidFromAlgorandAddress } from './utils/token-utils.js'
 import jwtAuthorize from './middleware/jwt-authorize.js'
 import UserRepository from './repository/user.repository.js'
-import { TypePositiveOrZeroNumberError } from './error/type-positive-number.error.js'
-import { isPositiveNumber, isPositiveOrZeroNumber, isValidTrackerType } from './utils/validators.js'
+import { TypePositiveOrZeroNumberError } from './error/type-positive-or-zero-number.error.js'
+import { getPositiveNumberOrDefault, isPositiveOrZeroNumber, isValidTrackerType } from './utils/validators.js'
 import TrackerRepository from './repository/tracker.repository.js'
 import { mintToken } from './utils/token-minter.js'
 import { getTokenWithUserInfo } from './utils/token-info.js'
@@ -404,7 +404,9 @@ router.get('/trackers/:tokenId/utility/consumption', jwtAuthorize, async ctx => 
     // timestamps must be in milliseconds
     let { page, pageSize, from, to, groupBy, sort } = ctx.request.query
 
-    if (page && !isPositiveNumber(parseInt(page))) throw new TypePositiveOrZeroNumberError('page')
+    page = getPositiveNumberOrDefault(page, 1)
+    pageSize = getPositiveNumberOrDefault(pageSize, 10)
+
     if (from) from = convertUnixTimestampToIsoTimeString(from)
     if (to) to = convertUnixTimestampToIsoTimeString(to)
 
@@ -439,6 +441,10 @@ router.get('/trackers/:tokenId/utility/consumption', jwtAuthorize, async ctx => 
 
     if (response.status !== 200 || !response.json.results) throw new UtilityMeterConsumptionNotFoundError()
 
+    let nextPage
+    if (response.json.count > page * pageSize) nextPage = page + 1
+    else nextPage = undefined
+
     ctx.body = {
         count: response.json.count,
         consumptions: response.json.results.map(item => ({
@@ -446,7 +452,7 @@ router.get('/trackers/:tokenId/utility/consumption', jwtAuthorize, async ctx => 
             start: convertIsoTimeStringToUnixTimestamp(item.interval_start),
             end: convertIsoTimeStringToUnixTimestamp(item.interval_end)
         })),
-        nextPage: !page ? 2 : parseInt(page) + 1
+        nextPage
     }
     ctx.status = 200
 })
