@@ -2465,11 +2465,12 @@ describe('app', function () {
 
             aes256encrypt.mockImplementation(() => ({ iv: 'enc-iv', encryptedData: 'end-data' }))
 
+            let txnCount = 1
             mockStdlib.getProvider.mockImplementation(() =>
                 Promise.resolve({
                     algodClient: {
                         getTransactionParams: () => ({ do: async () => Promise.resolve({ param: 'txn_param' }) }),
-                        sendRawTransaction: () => ({ do: async () => Promise.resolve({ txId: 'txn_id' }) })
+                        sendRawTransaction: () => ({ do: async () => Promise.resolve({ txId: `txn_id_${txnCount++}` }) })
                     }
                 })
             )
@@ -2480,34 +2481,55 @@ describe('app', function () {
                 signTxn: mockSignedTnx
             }))
 
-            const response = await request(app.callback()).post('/readings').send({
-                trackerId: 'tracker_id',
-                value: '12345',
-                unit: 'kwh'
-            })
+            const response = await request(app.callback())
+                .post('/readings')
+                .send({
+                    trackerId: 'tracker_id',
+                    readings: [
+                        {
+                            type: 'consumption',
+                            value: '0.123',
+                            unit: 'kwh',
+                            start: '12345',
+                            end: '67890'
+                        },
+                        {
+                            type: 'absolute',
+                            value: '12345',
+                            unit: 'kwh',
+                            start: '1111',
+                            end: '2222'
+                        }
+                    ]
+                })
 
-            expect(aes256encrypt).toHaveBeenCalledTimes(1)
+            expect(aes256encrypt).toHaveBeenCalledTimes(2)
+            expect(aes256encrypt).toHaveBeenCalledWith('0.123')
             expect(aes256encrypt).toHaveBeenCalledWith('12345')
 
-            expect(mockTrackerRepository.createReading).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.createReading).toHaveBeenCalledTimes(2)
             expect(mockTrackerRepository.createReading).toHaveBeenCalledWith({
                 encryptionIV: 'enc-iv',
-                id: 'txn_id',
+                id: 'txn_id_1',
+                isAdmin: true,
+                trackerId: 'tracker_id',
+                userId: 'user_id'
+            })
+            expect(mockTrackerRepository.createReading).toHaveBeenCalledWith({
+                encryptionIV: 'enc-iv',
+                id: 'txn_id_2',
                 isAdmin: true,
                 trackerId: 'tracker_id',
                 userId: 'user_id'
             })
 
             expect(response.status).toBe(201)
-            expect(response.body).toEqual({
-                id: 'txn_id'
-            })
+            expect(response.body).toEqual({})
         })
 
         it('should return 400 when reading trackerId is missing', async () => {
             const response = await request(app.callback()).post('/readings').send({
-                value: '12345',
-                unit: 'kwh'
+                readings: []
             })
 
             expect(response.status).toBe(400)
@@ -2517,11 +2539,63 @@ describe('app', function () {
             })
         })
 
-        it('should return 400 when reading value is missing', async () => {
+        it('should return 400 when readings value is missing', async () => {
+            const response = await request(app.callback()).post('/readings').send({
+                trackerId: '12345'
+            })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'readings must be specified'
+            })
+        })
+
+        it('should return 400 when readings is empty array', async () => {
             const response = await request(app.callback()).post('/readings').send({
                 trackerId: '12345',
-                unit: 'kwh'
+                readings: []
             })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'ParameterNotArrayError',
+                message: 'readings must be an array of items'
+            })
+        })
+
+        it('should return 400 when reading is without type', async () => {
+            const response = await request(app.callback())
+                .post('/readings')
+                .send({
+                    trackerId: '12345',
+                    readings: [
+                        {
+                            value: '1234',
+                            unit: 'kWh'
+                        }
+                    ]
+                })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'type must be specified'
+            })
+        })
+
+        it('should return 400 when reading is without value', async () => {
+            const response = await request(app.callback())
+                .post('/readings')
+                .send({
+                    trackerId: '12345',
+                    readings: [
+                        {
+                            type: 'great',
+                            unit: 'kWh'
+                        }
+                    ]
+                })
 
             expect(response.status).toBe(400)
             expect(response.body).toEqual({
@@ -2530,11 +2604,18 @@ describe('app', function () {
             })
         })
 
-        it('should return 400 when reading unit is missing', async () => {
-            const response = await request(app.callback()).post('/readings').send({
-                trackerId: '12345',
-                value: '14'
-            })
+        it('should return 400 when reading is without unit', async () => {
+            const response = await request(app.callback())
+                .post('/readings')
+                .send({
+                    trackerId: '12345',
+                    readings: [
+                        {
+                            type: 'great',
+                            value: '0.45'
+                        }
+                    ]
+                })
 
             expect(response.status).toBe(400)
             expect(response.body).toEqual({

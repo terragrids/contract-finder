@@ -32,6 +32,7 @@ import { UtilityMeterConsumptionNotFoundError } from './error/utility-meter-cons
 import { convertIsoTimeStringToUnixTimestamp, convertUnixTimestampToIsoTimeString } from './utils/string-utils.js'
 import { UtilityMeterPointNotFoundError } from './error/utility-meter-point-not-found.error.js'
 import { UtilityMeterSerialNotFoundError } from './error/utility-meter-serial-not-found.error.js'
+import ParameterNotArrayError from './error/parameter-not-array.error.js'
 
 dotenv.config()
 export const app = new Koa()
@@ -296,27 +297,55 @@ router.delete('/trackers/:tokenId/utility', jwtAuthorize, async ctx => {
 
 router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
     if (!ctx.request.body.trackerId) throw new MissingParameterError('trackerId')
-    if (!ctx.request.body.value) throw new MissingParameterError('value')
-    if (!ctx.request.body.unit) throw new MissingParameterError('unit')
+    if (!ctx.request.body.readings) throw new MissingParameterError('readings')
+    if (!ctx.request.body.readings.length) throw new ParameterNotArrayError('readings')
+    for (const reading of ctx.request.body.readings) {
+        if (!reading.type) throw new MissingParameterError('type')
+        if (!reading.value) throw new MissingParameterError('value')
+        if (!reading.unit) throw new MissingParameterError('unit')
+    }
 
     const stdlib = new ReachProvider().getStdlib()
     const [algoAccount, user] = await Promise.all([stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
 
-    // Make reading transaction
-    const { iv, encryptedData } = aes256encrypt(ctx.request.body.value)
-    const note = { type: 'terragrids-reading', trackerId: ctx.request.body.trackerId, value: encryptedData, unit: ctx.request.body.unit, encryption: 'aes256' }
-    const { id } = await makeZeroTransactionToSelf(stdlib, algoAccount, note)
+    const ivs = []
+    const txnPromises = []
 
-    // Save reading off-chain
-    await new TrackerRepository().createReading({
-        id,
-        trackerId: ctx.request.body.trackerId,
-        userId: user.id,
-        encryptionIV: iv,
-        isAdmin: user.permissions.includes(0)
-    })
+    for (const reading of ctx.request.body.readings) {
+        // Make reading transaction
+        const { iv, encryptedData } = aes256encrypt(reading.value)
+        ivs.push(iv)
+        const note = {
+            type: `terragrids-reading-${reading.type}`,
+            trackerId: ctx.request.body.trackerId,
+            value: encryptedData,
+            unit: reading.unit,
+            encryption: 'aes256',
+            ...(reading.start && { start: reading.start }),
+            ...(reading.end && { end: reading.end })
+        }
+        txnPromises.push(makeZeroTransactionToSelf(stdlib, algoAccount, note))
+    }
 
-    ctx.body = { id }
+    const txnResults = await Promise.all(txnPromises)
+
+    const repoPromises = []
+    for (const [i] of ctx.request.body.readings.entries()) {
+        // Save reading off-chain
+        repoPromises.push(
+            new TrackerRepository().createReading({
+                id: txnResults[i].id,
+                trackerId: ctx.request.body.trackerId,
+                userId: user.id,
+                encryptionIV: ivs[i],
+                isAdmin: user.permissions.includes(0)
+            })
+        )
+    }
+
+    await Promise.all(repoPromises)
+
+    ctx.body = ''
     ctx.status = 201
 })
 
