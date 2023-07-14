@@ -169,6 +169,46 @@ export default class TrackerRepository extends DynamoDbRepository {
         })
     }
 
+    async createReadings({ trackerId, userId, readings, isAdmin }) {
+        const now = Date.now()
+
+        await this.transactWrite({
+            items: [
+                ...readings.map(reading => ({
+                    command: 'Put',
+                    data: {
+                        pk: { S: `${this.readingPrefix}|${reading.id}` },
+                        gsi1pk: { S: `${this.trackerPrefix}|${trackerId}` },
+                        gsi2pk: { S: `type|${this.readingPrefix}` },
+                        data: { S: `${this.readingPrefix}|active|${now}` },
+                        userId: { S: userId },
+                        created: { N: now.toString() },
+                        hash: { S: reading.encryptionIV }
+                    }
+                })),
+                ...readings
+                    .filter(reading => reading.type === 'consumption')
+                    .map(reading => ({
+                        command: 'Put',
+                        data: {
+                            pk: { S: `consumption|${trackerId}|${reading.start}|${reading.end}` }
+                        }
+                    })),
+                {
+                    command: 'UpdateCounter',
+                    key: { pk: { S: `${this.trackerPrefix}|${trackerId}` } },
+                    counters: [
+                        {
+                            name: 'readingCount',
+                            change: readings.length
+                        }
+                    ]
+                }
+            ],
+            ...(!isAdmin && { conditions: [this.checkTrackerBelongsToUser(trackerId, userId)] })
+        })
+    }
+
     async getReadings({ trackerId, status, sort, pageSize, nextPageKey }) {
         const forward = sort && sort === 'desc' ? false : true
         let condition = 'gsi1pk = :gsi1pk'

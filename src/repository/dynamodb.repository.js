@@ -69,7 +69,7 @@ export default class DynamoDbRepository {
             } catch (e) {
                 if (e instanceof ConditionalCheckFailedException) throw e
                 if (e instanceof TransactionCanceledException && e.CancellationReasons && e.CancellationReasons.some(r => r.Code === 'ConditionalCheckFailed')) throw new UserUnauthorizedError()
-                throw new RepositoryError(e, `Unable to update ${itemLogName}`)
+                throw new RepositoryError(e, `Unable to put ${itemLogName}`)
             }
         } else {
             const command = new PutItemCommand(putParams)
@@ -82,38 +82,52 @@ export default class DynamoDbRepository {
         }
     }
 
-    async update({ key, attributes, itemLogName = 'item', userId, permissions }) {
-        const updateExpressionList = []
-        const attributeValues = {}
-        let attributeNames
-
-        if (Object.values(attributes).some(value => value !== undefined)) {
-            const updateAttributes = attributes
-
-            for (const [key, value] of Object.entries(updateAttributes)) {
-                if (value !== undefined) {
-                    let placeholder = key
-                    if (key.startsWith('#')) {
-                        placeholder = key.substring(1)
-                        if (!attributeNames) attributeNames = {}
-                        attributeNames[key] = placeholder
+    async transactWrite({ items, conditions }) {
+        const transactParams = {
+            TransactItems: [
+                ...conditions,
+                ...items.map(item => {
+                    switch (item.command) {
+                        case 'Put':
+                            return {
+                                Put: {
+                                    TableName: this.table,
+                                    Item: item.data
+                                }
+                            }
+                        case 'Update':
+                            return {
+                                Update: this.getUpdateParams(item.key, item.attributes)
+                            }
+                        case 'UpdateCounter':
+                            return {
+                                Update: {
+                                    TableName: this.table,
+                                    Key: item.key,
+                                    UpdateExpression: `add ${item.counters.map(c => `${c.name} :${c.name}`).join(',')}`,
+                                    ExpressionAttributeValues: {
+                                        ...item.counters.reduce((map, counter) => ((map[`:${counter.name}`] = { N: counter.change }), map), {})
+                                    }
+                                }
+                            }
                     }
-                    updateExpressionList.push(`${key} = :${placeholder}`)
-                    attributeValues[`:${placeholder}`] = value
-                }
-            }
+                })
+            ]
         }
 
-        const updateExpression = updateExpressionList.length > 0 ? `set ${updateExpressionList.join(',')}` : null
+        const command = new TransactWriteItemsCommand(transactParams)
 
-        const updateParams = {
-            TableName: this.table,
-            Key: key,
-            UpdateExpression: updateExpression,
-            ExpressionAttributeValues: attributeValues,
-            ExpressionAttributeNames: attributeNames,
-            ConditionExpression: 'attribute_exists(pk)'
+        try {
+            return await this.client.send(command)
+        } catch (e) {
+            if (e instanceof ConditionalCheckFailedException) throw e
+            if (e instanceof TransactionCanceledException && e.CancellationReasons && e.CancellationReasons.some(r => r.Code === 'ConditionalCheckFailed')) throw new UserUnauthorizedError()
+            throw new RepositoryError(e, 'Unable to execute transaction')
         }
+    }
+
+    async update({ key, attributes, itemLogName = 'item', userId, permissions }) {
+        const updateParams = this.getUpdateParams(key, attributes)
 
         if (permissions && userId) {
             const transactParams = {
@@ -143,6 +157,40 @@ export default class DynamoDbRepository {
                 if (e instanceof ConditionalCheckFailedException) throw e
                 throw new RepositoryError(e, `Unable to update ${itemLogName}`)
             }
+        }
+    }
+
+    getUpdateParams(key, attributes) {
+        const updateExpressionList = []
+        const attributeValues = {}
+        let attributeNames
+
+        if (Object.values(attributes).some(value => value !== undefined)) {
+            const updateAttributes = attributes
+
+            for (const [key, value] of Object.entries(updateAttributes)) {
+                if (value !== undefined) {
+                    let placeholder = key
+                    if (key.startsWith('#')) {
+                        placeholder = key.substring(1)
+                        if (!attributeNames) attributeNames = {}
+                        attributeNames[key] = placeholder
+                    }
+                    updateExpressionList.push(`${key} = :${placeholder}`)
+                    attributeValues[`:${placeholder}`] = value
+                }
+            }
+        }
+
+        const updateExpression = updateExpressionList.length > 0 ? `set ${updateExpressionList.join(',')}` : null
+
+        return {
+            TableName: this.table,
+            Key: key,
+            UpdateExpression: updateExpression,
+            ExpressionAttributeValues: attributeValues,
+            ExpressionAttributeNames: attributeNames,
+            ConditionExpression: 'attribute_exists(pk)'
         }
     }
 
