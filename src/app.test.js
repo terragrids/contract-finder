@@ -2649,7 +2649,8 @@ describe('app', function () {
                         id: 'id-3',
                         created: 'reading-date-3'
                     }
-                ]
+                ],
+                nextPageKey: 'next_page_key'
             }))
 
             mockAlgoIndexer.callAlgonodeIndexerEndpoint.mockImplementation(params => {
@@ -2702,7 +2703,8 @@ describe('app', function () {
                         unit: 'kwh',
                         created: 'reading-date-2'
                     }
-                ]
+                ],
+                nextPageKey: 'next_page_key'
             })
         })
 

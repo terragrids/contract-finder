@@ -386,7 +386,10 @@ router.get('/trackers/:tokenId/readings', async ctx => {
 
     const readings = await Promise.all(promises)
 
-    ctx.body = { readings: readings.filter(reading => reading !== null) }
+    ctx.body = {
+        readings: readings.filter(reading => reading !== null),
+        nextPageKey: repositoryResponse.nextPageKey
+    }
     ctx.status = 200
 })
 
