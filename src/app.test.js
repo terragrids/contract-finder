@@ -73,7 +73,7 @@ const mockTrackerRepository = {
     getTracker: jest.fn().mockImplementation(() => jest.fn()),
     updateTracker: jest.fn().mockImplementation(() => jest.fn()),
     removeTrackerUtility: jest.fn().mockImplementation(() => jest.fn()),
-    createReading: jest.fn().mockImplementation(() => jest.fn()),
+    createReadings: jest.fn().mockImplementation(() => jest.fn()),
     getReadings: jest.fn().mockImplementation(() => jest.fn()),
     getReading: jest.fn().mockImplementation(() => jest.fn())
 }
@@ -84,7 +84,7 @@ jest.mock('./repository/tracker.repository.js', () =>
         getTracker: mockTrackerRepository.getTracker,
         updateTracker: mockTrackerRepository.updateTracker,
         removeTrackerUtility: mockTrackerRepository.removeTrackerUtility,
-        createReading: mockTrackerRepository.createReading,
+        createReadings: mockTrackerRepository.createReadings,
         getReadings: mockTrackerRepository.getReadings,
         getReading: mockTrackerRepository.getReading
     }))
@@ -2463,6 +2463,12 @@ describe('app', function () {
                 permissions: [0]
             }))
 
+            mockTrackerRepository.getTracker.mockImplementation(() => ({
+                id: 'tracker_id',
+                placeId: 'place_id',
+                userId: 'user_id'
+            }))
+
             aes256encrypt.mockImplementation(() => ({ iv: 'enc-iv', encryptedData: 'end-data' }))
 
             let txnCount = 1
@@ -2507,20 +2513,22 @@ describe('app', function () {
             expect(aes256encrypt).toHaveBeenCalledWith('0.123')
             expect(aes256encrypt).toHaveBeenCalledWith('12345')
 
-            expect(mockTrackerRepository.createReading).toHaveBeenCalledTimes(2)
-            expect(mockTrackerRepository.createReading).toHaveBeenCalledWith({
-                encryptionIV: 'enc-iv',
-                id: 'txn_id_1',
-                isAdmin: true,
+            expect(mockTrackerRepository.createReadings).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.createReadings).toHaveBeenCalledWith({
                 trackerId: 'tracker_id',
-                userId: 'user_id'
-            })
-            expect(mockTrackerRepository.createReading).toHaveBeenCalledWith({
-                encryptionIV: 'enc-iv',
-                id: 'txn_id_2',
+                placeId: 'place_id',
+                userId: 'user_id',
                 isAdmin: true,
-                trackerId: 'tracker_id',
-                userId: 'user_id'
+                readings: [
+                    {
+                        id: 'txn_id_1',
+                        encryptionIV: 'enc-iv'
+                    },
+                    {
+                        id: 'txn_id_2',
+                        encryptionIV: 'enc-iv'
+                    }
+                ]
             })
 
             expect(response.status).toBe(201)

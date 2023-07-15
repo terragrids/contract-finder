@@ -306,7 +306,13 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
     }
 
     const stdlib = new ReachProvider().getStdlib()
-    const [algoAccount, user] = await Promise.all([stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC), new UserRepository().getUserByOauthId(ctx.state.jwt.sub)])
+    const trackerRepository = new TrackerRepository()
+
+    const [algoAccount, user, tracker] = await Promise.all([
+        stdlib.newAccountFromMnemonic(process.env.ALGO_ACCOUNT_MNEMONIC),
+        new UserRepository().getUserByOauthId(ctx.state.jwt.sub),
+        trackerRepository.getTracker(ctx.request.body.trackerId)
+    ])
 
     const ivs = []
     const txnPromises = []
@@ -318,6 +324,7 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
         const note = {
             type: `terragrids-reading-${reading.type}`,
             trackerId: ctx.request.body.trackerId,
+            placeId: tracker.placeId,
             value: encryptedData,
             unit: reading.unit,
             encryption: 'aes256',
@@ -329,21 +336,16 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
 
     const txnResults = await Promise.all(txnPromises)
 
-    const repoPromises = []
-    for (const [i] of ctx.request.body.readings.entries()) {
-        // Save reading off-chain
-        repoPromises.push(
-            new TrackerRepository().createReading({
-                id: txnResults[i].id,
-                trackerId: ctx.request.body.trackerId,
-                userId: user.id,
-                encryptionIV: ivs[i],
-                isAdmin: user.permissions.includes(0)
-            })
-        )
-    }
-
-    await Promise.all(repoPromises)
+    await trackerRepository.createReadings({
+        trackerId: ctx.request.body.trackerId,
+        placeId: tracker.placeId,
+        userId: user.id,
+        isAdmin: user.permissions.includes(0),
+        readings: ctx.request.body.readings.map((_, index) => ({
+            id: txnResults[index].id,
+            encryptionIV: ivs[index]
+        }))
+    })
 
     ctx.body = ''
     ctx.status = 201

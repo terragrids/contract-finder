@@ -85,6 +85,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                 return {
                     id: tokenId,
                     userId: data.Item.userId?.S,
+                    placeId: data.Item.gsi1pk.S.replace(`${this.placePrefix}|`, ''),
                     name: data.Item.name.S,
                     status,
                     type,
@@ -151,26 +152,11 @@ export default class TrackerRepository extends DynamoDbRepository {
         }
     }
 
-    async createReading({ id, trackerId, userId, encryptionIV, isAdmin }) {
+    async createReadings({ trackerId, placeId, userId, isAdmin, readings }) {
         const now = Date.now()
 
-        return await this.put({
-            item: {
-                pk: { S: `${this.readingPrefix}|${id}` },
-                gsi1pk: { S: `${this.trackerPrefix}|${trackerId}` },
-                gsi2pk: { S: `type|${this.readingPrefix}` },
-                data: { S: `${this.readingPrefix}|active|${now}` },
-                userId: { S: userId },
-                created: { N: now.toString() },
-                hash: { S: encryptionIV }
-            },
-            itemLogName: this.itemName,
-            ...(!isAdmin && { transactionConditions: [this.checkTrackerBelongsToUser(trackerId, userId)] })
-        })
-    }
-
-    async createReadings({ trackerId, userId, readings, isAdmin }) {
-        const now = Date.now()
+        const consumptionReadings = readings.filter(reading => reading.type === 'consumption')
+        const absoluteReadings = readings.filter(reading => reading.type === 'absolute')
 
         await this.transactWrite({
             items: [
@@ -186,24 +172,52 @@ export default class TrackerRepository extends DynamoDbRepository {
                         hash: { S: reading.encryptionIV }
                     }
                 })),
-                ...readings
-                    .filter(reading => reading.type === 'consumption')
-                    .map(reading => ({
-                        command: 'Put',
-                        data: {
-                            pk: { S: `consumption|${trackerId}|${reading.start}|${reading.end}` }
-                        }
-                    })),
-                {
+                ...consumptionReadings.map(reading => ({
+                    command: 'Put',
+                    data: {
+                        pk: { S: `consumption|${trackerId}|${reading.start}|${reading.end}` }
+                    }
+                })),
+                ...(consumptionReadings.length && {
                     command: 'UpdateCounter',
                     key: { pk: { S: `${this.trackerPrefix}|${trackerId}` } },
                     counters: [
                         {
-                            name: 'readingCount',
-                            change: readings.length
+                            name: 'consumptionReadingCount',
+                            change: consumptionReadings.length
                         }
                     ]
-                }
+                }),
+                ...(consumptionReadings.length && {
+                    command: 'UpdateCounter',
+                    key: { pk: { S: `${this.placePrefix}|${placeId}` } },
+                    counters: [
+                        {
+                            name: 'consumptionReadingCount',
+                            change: consumptionReadings.length
+                        }
+                    ]
+                }),
+                ...(absoluteReadings.length && {
+                    command: 'UpdateCounter',
+                    key: { pk: { S: `${this.trackerPrefix}|${trackerId}` } },
+                    counters: [
+                        {
+                            name: 'absoluteReadingsCount',
+                            change: absoluteReadings.length
+                        }
+                    ]
+                }),
+                ...(absoluteReadings.length && {
+                    command: 'UpdateCounter',
+                    key: { pk: { S: `${this.placePrefix}|${placeId}` } },
+                    counters: [
+                        {
+                            name: 'absoluteReadingsCount',
+                            change: absoluteReadings.length
+                        }
+                    ]
+                })
             ],
             ...(!isAdmin && { conditions: [this.checkTrackerBelongsToUser(trackerId, userId)] })
         })
