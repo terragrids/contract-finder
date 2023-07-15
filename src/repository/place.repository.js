@@ -43,7 +43,9 @@ export default class PlaceRepository extends DynamoDbRepository {
                     positionY: parseInt(data.Item.positionY.N),
                     ...(data.Item.created && { created: parseInt(data.Item.created.N) }),
                     ...(data.Item.archived && { archived: parseInt(data.Item.archived.N) }),
-                    ...(data.Item.offChainImageUrl && data.Item.offChainImageUrl.S && { offChainImageUrl: data.Item.offChainImageUrl.S })
+                    ...(data.Item.offChainImageUrl && data.Item.offChainImageUrl.S && { offChainImageUrl: data.Item.offChainImageUrl.S }),
+                    ...(data.Item.consumptionReadingCount && { consumptionReadingCount: data.Item.consumptionReadingCount.N }),
+                    ...(data.Item.absoluteReadingCount && { absoluteReadingCount: data.Item.absoluteReadingCount.N })
                 }
             }
 

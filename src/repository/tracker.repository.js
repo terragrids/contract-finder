@@ -96,6 +96,8 @@ export default class TrackerRepository extends DynamoDbRepository {
                     ...(data.Item.meterMpan && { meterMpan: data.Item.meterMpan.S }),
                     ...(data.Item.meterMprn && { meterMprn: data.Item.meterMprn.S }),
                     ...(data.Item.meterSerialNumber && { meterSerialNumber: data.Item.meterSerialNumber.S }),
+                    ...(data.Item.consumptionReadingCount && { consumptionReadingCount: data.Item.consumptionReadingCount.N }),
+                    ...(data.Item.absoluteReadingCount && { absoluteReadingCount: data.Item.absoluteReadingCount.N }),
                     created: data.Item.created.N,
                     lastModified: date
                 }
@@ -178,48 +180,64 @@ export default class TrackerRepository extends DynamoDbRepository {
                         pk: { S: `consumption|${trackerId}|${reading.start}|${reading.end}` }
                     }
                 })),
-                ...(consumptionReadings.length && {
-                    command: 'UpdateCounter',
-                    key: { pk: { S: `${this.trackerPrefix}|${trackerId}` } },
-                    counters: [
-                        {
-                            name: 'consumptionReadingCount',
-                            change: consumptionReadings.length
-                        }
-                    ]
-                }),
-                ...(consumptionReadings.length && {
-                    command: 'UpdateCounter',
-                    key: { pk: { S: `${this.placePrefix}|${placeId}` } },
-                    counters: [
-                        {
-                            name: 'consumptionReadingCount',
-                            change: consumptionReadings.length
-                        }
-                    ]
-                }),
-                ...(absoluteReadings.length && {
-                    command: 'UpdateCounter',
-                    key: { pk: { S: `${this.trackerPrefix}|${trackerId}` } },
-                    counters: [
-                        {
-                            name: 'absoluteReadingsCount',
-                            change: absoluteReadings.length
-                        }
-                    ]
-                }),
-                ...(absoluteReadings.length && {
-                    command: 'UpdateCounter',
-                    key: { pk: { S: `${this.placePrefix}|${placeId}` } },
-                    counters: [
-                        {
-                            name: 'absoluteReadingsCount',
-                            change: absoluteReadings.length
-                        }
-                    ]
-                })
+                ...(consumptionReadings.length
+                    ? [
+                          {
+                              command: 'UpdateCounter',
+                              key: { pk: { S: `${this.trackerPrefix}|${trackerId}` } },
+                              counters: [
+                                  {
+                                      name: 'consumptionReadingCount',
+                                      change: consumptionReadings.length
+                                  }
+                              ]
+                          }
+                      ]
+                    : []),
+                ...(consumptionReadings.length
+                    ? [
+                          {
+                              command: 'UpdateCounter',
+                              key: { pk: { S: `${this.placePrefix}|${placeId}` } },
+                              counters: [
+                                  {
+                                      name: 'consumptionReadingCount',
+                                      change: consumptionReadings.length
+                                  }
+                              ]
+                          }
+                      ]
+                    : []),
+                ...(absoluteReadings.length
+                    ? [
+                          {
+                              command: 'UpdateCounter',
+                              key: { pk: { S: `${this.trackerPrefix}|${trackerId}` } },
+                              counters: [
+                                  {
+                                      name: 'absoluteReadingsCount',
+                                      change: absoluteReadings.length
+                                  }
+                              ]
+                          }
+                      ]
+                    : []),
+                ...(absoluteReadings.length
+                    ? [
+                          {
+                              command: 'UpdateCounter',
+                              key: { pk: { S: `${this.placePrefix}|${placeId}` } },
+                              counters: [
+                                  {
+                                      name: 'absoluteReadingsCount',
+                                      change: absoluteReadings.length
+                                  }
+                              ]
+                          }
+                      ]
+                    : [])
             ],
-            ...(!isAdmin && { conditions: [this.checkTrackerBelongsToUser(trackerId, userId)] })
+            conditions: !isAdmin ? [this.checkTrackerBelongsToUser(trackerId, userId)] : []
         })
     }
 
