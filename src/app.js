@@ -366,6 +366,7 @@ router.get('/trackers/:tokenId/readings', async ctx => {
         promises.push(
             (async () => {
                 const response = await indexer.callAlgonodeIndexerEndpoint(`transactions/${reading.id}`)
+
                 if (!response || response.status !== 200) {
                     return null
                 }
@@ -373,7 +374,8 @@ router.get('/trackers/:tokenId/readings', async ctx => {
                     try {
                         var note = JSON.parse(Buffer.from(response.json.transaction.note, 'base64'))
                         const value = note.encryption === 'aes256' ? aes256decrypt(note.value, reading.iv) : note.value
-                        return { ...reading, iv: undefined, value, unit: note.unit }
+                        const type = note.type ? note.type.replace('terragrids-reading-', '') : undefined
+                        return { ...reading, iv: undefined, value, unit: note.unit, type, start: note.start, end: note.end }
                     } catch (e) {
                         return null
                     }

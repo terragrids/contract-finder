@@ -2734,7 +2734,7 @@ describe('app', function () {
                         json: {
                             transaction: {
                                 index: `txn-${txnId}`,
-                                note: Buffer.from(JSON.stringify({ encryption: 'aes256', value: 1234, unit: 'kwh' })).toString('base64')
+                                note: Buffer.from(JSON.stringify({ encryption: 'aes256', value: 1234, unit: 'kwh', type: txnId === 'id-1' ? 'absolute' : undefined })).toString('base64')
                             }
                         }
                     })
@@ -2770,6 +2770,7 @@ describe('app', function () {
                 readings: [
                     {
                         id: 'id-1',
+                        type: 'absolute',
                         value: 'decrypted-value',
                         unit: 'kwh',
                         created: 'reading-date-1'
@@ -2810,7 +2811,11 @@ describe('app', function () {
                         json: {
                             transaction: {
                                 index: `txn-${txnId}`,
-                                ...(txnId === 'id-1' && { note: Buffer.from(JSON.stringify({ encryption: 'aes256', value: 1234, unit: 'kwh' })).toString('base64') })
+                                ...(txnId === 'id-1' && {
+                                    note: Buffer.from(JSON.stringify({ encryption: 'aes256', value: 1234, unit: 'kwh', type: 'terragrids-reading-consumption', start: 123, end: 456 })).toString(
+                                        'base64'
+                                    )
+                                })
                             }
                         }
                     })
@@ -2848,7 +2853,10 @@ describe('app', function () {
                         id: 'id-1',
                         value: 'decrypted-value',
                         unit: 'kwh',
-                        created: 'reading-date-1'
+                        created: 'reading-date-1',
+                        type: 'consumption',
+                        start: 123,
+                        end: 456
                     },
                     {
                         id: 'id-2',
@@ -2884,7 +2892,9 @@ describe('app', function () {
                         json: {
                             transaction: {
                                 index: `txn-${txnId}`,
-                                ...(txnId === 'id-1' && { note: Buffer.from(JSON.stringify({ encryption: 'aes256', value: 1234, unit: 'kwh' })).toString('base64') }),
+                                ...(txnId === 'id-1' && {
+                                    note: Buffer.from(JSON.stringify({ encryption: 'aes256', value: 1234, unit: 'kwh', type: 'terragrids-reading-absolute' })).toString('base64')
+                                }),
                                 ...(txnId === 'id-2' && { note: 'meh' })
                             }
                         }
@@ -2923,7 +2933,8 @@ describe('app', function () {
                         id: 'id-1',
                         value: 'decrypted-value',
                         unit: 'kwh',
-                        created: 'reading-date-1'
+                        created: 'reading-date-1',
+                        type: 'absolute'
                     }
                 ]
             })
