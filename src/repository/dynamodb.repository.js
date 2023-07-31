@@ -1,4 +1,5 @@
 import {
+    BatchGetItemCommand,
     ConditionalCheckFailedException,
     DeleteItemCommand,
     DescribeTableCommand,
@@ -206,6 +207,27 @@ export default class DynamoDbRepository {
         } catch (e) {
             if (e instanceof ConditionalCheckFailedException) throw e
             throw new RepositoryError(e, `Unable to get ${itemLogName}`)
+        }
+    }
+
+    async batchGetItems({ keys, projection }) {
+        const params = {
+            RequestItems: {
+                [this.table]: {
+                    Keys: keys,
+                    ProjectionExpression: projection
+                }
+            }
+        }
+
+        const command = new BatchGetItemCommand(params)
+
+        try {
+            const result = await this.client.send(command)
+            return result.Responses[this.table]
+        } catch (e) {
+            if (e instanceof ConditionalCheckFailedException) throw e
+            throw new RepositoryError(e, 'Unable to batch get items')
         }
     }
 

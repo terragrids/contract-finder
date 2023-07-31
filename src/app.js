@@ -341,9 +341,12 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
         placeId: tracker.placeId,
         userId: user.id,
         isAdmin: user.permissions.includes(0),
-        readings: ctx.request.body.readings.map((_, index) => ({
+        readings: ctx.request.body.readings.map((reading, index) => ({
             id: txnResults[index].id,
-            encryptionIV: ivs[index]
+            type: reading.type,
+            encryptionIV: ivs[index],
+            ...(reading.start && { start: reading.start }),
+            ...(reading.end && { end: reading.end })
         }))
     })
 
@@ -477,16 +480,29 @@ router.get('/trackers/:tokenId/utility/consumption', jwtAuthorize, async ctx => 
 
     if (response.status !== 200 || !response.json.results) throw new UtilityMeterConsumptionNotFoundError()
 
+    const consumptions = response.json.results.map(item => ({
+        consumption: item.consumption,
+        start: convertIsoTimeStringToUnixTimestamp(item.interval_start),
+        end: convertIsoTimeStringToUnixTimestamp(item.interval_end)
+    }))
+
+    const importedReadings =
+        consumptions.length > 0
+            ? await trackerRepository.getConsumptionReadingExistenceByInterval({
+                  trackerId: ctx.params.tokenId,
+                  intervals: consumptions
+              })
+            : []
+
     let nextPage
     if (response.json.count > page * pageSize) nextPage = page + 1
     else nextPage = undefined
 
     ctx.body = {
         count: response.json.count,
-        consumptions: response.json.results.map(item => ({
-            consumption: item.consumption,
-            start: convertIsoTimeStringToUnixTimestamp(item.interval_start),
-            end: convertIsoTimeStringToUnixTimestamp(item.interval_end)
+        consumptions: consumptions.map(item => ({
+            ...item,
+            imported: importedReadings.some(r => r.start == item.start && r.end == item.end)
         })),
         nextPage
     }

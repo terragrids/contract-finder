@@ -6,6 +6,7 @@ import ReadingNotFoundError from '../error/reading-not-found.error.js'
 export default class TrackerRepository extends DynamoDbRepository {
     trackerPrefix = 'tracker'
     readingPrefix = 'reading'
+    importedTimestampPrefix = 'imp-ts'
     placePrefix = 'place'
     itemName = 'tracker'
 
@@ -157,7 +158,7 @@ export default class TrackerRepository extends DynamoDbRepository {
     async createReadings({ trackerId, placeId, userId, isAdmin, readings }) {
         const now = Date.now()
 
-        const consumptionReadings = readings.filter(reading => reading.type === 'consumption')
+        const consumptionReadings = readings.filter(reading => reading.type === 'consumption' && reading.start !== undefined && reading.end !== undefined)
         const absoluteReadings = readings.filter(reading => reading.type === 'absolute')
 
         await this.transactWrite({
@@ -168,7 +169,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                         pk: { S: `${this.readingPrefix}|${reading.id}` },
                         gsi1pk: { S: `${this.trackerPrefix}|${trackerId}` },
                         gsi2pk: { S: `type|${this.readingPrefix}` },
-                        data: { S: `${this.readingPrefix}|active|${now}` },
+                        data: { S: `${this.readingPrefix}|active|${reading.start || now}` },
                         userId: { S: userId },
                         created: { N: now.toString() },
                         hash: { S: reading.encryptionIV }
@@ -177,7 +178,10 @@ export default class TrackerRepository extends DynamoDbRepository {
                 ...consumptionReadings.map(reading => ({
                     command: 'Put',
                     data: {
-                        pk: { S: `consumption|${trackerId}|${reading.start}|${reading.end}` }
+                        pk: { S: `consumption|${trackerId}|${reading.start}|${reading.end}` },
+                        gsi1pk: { S: `${this.trackerPrefix}|${trackerId}` },
+                        gsi2pk: { S: `type|${this.importedTimestampPrefix}` },
+                        data: { S: `${this.importedTimestampPrefix}|${reading.start}` }
                     }
                 })),
                 ...(consumptionReadings.length
@@ -303,5 +307,19 @@ export default class TrackerRepository extends DynamoDbRepository {
             if (e instanceof ConditionalCheckFailedException) throw new ReadingNotFoundError()
             else throw e
         }
+    }
+
+    async getConsumptionReadingExistenceByInterval({ trackerId, intervals }) {
+        const data = await this.batchGetItems({
+            keys: intervals.map(interval => ({
+                pk: { S: `consumption|${trackerId}|${interval.start}|${interval.end}` }
+            })),
+            projection: 'pk'
+        })
+
+        return data.map(item => {
+            const [, , start, end] = item.pk.S.split('|')
+            return { start, end }
+        })
     }
 }

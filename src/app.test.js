@@ -2502,9 +2502,7 @@ describe('app', function () {
                         {
                             type: 'absolute',
                             value: '12345',
-                            unit: 'kwh',
-                            start: '1111',
-                            end: '2222'
+                            unit: 'kwh'
                         }
                     ]
                 })
@@ -2522,11 +2520,15 @@ describe('app', function () {
                 readings: [
                     {
                         id: 'txn_id_1',
-                        encryptionIV: 'enc-iv'
+                        encryptionIV: 'enc-iv',
+                        start: '12345',
+                        end: '67890',
+                        type: 'consumption'
                     },
                     {
                         id: 'txn_id_2',
-                        encryptionIV: 'enc-iv'
+                        encryptionIV: 'enc-iv',
+                        type: 'absolute'
                     }
                 ]
             })
