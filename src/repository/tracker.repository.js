@@ -269,16 +269,22 @@ export default class TrackerRepository extends DynamoDbRepository {
         })
 
         return {
-            readings: data.items.map(reading => {
-                const [, status] = reading.data.S.split('|')
-                return {
-                    id: reading.pk.S.replace(`${this.readingPrefix}|`, ''),
-                    trackerId: reading.gsi1pk.S.replace(`${this.trackerPrefix}|`, ''),
-                    status,
-                    created: reading.created.N,
-                    ...(reading.hash && { iv: reading.hash.S })
-                }
-            }),
+            readings: data.items
+                .map(reading => {
+                    try {
+                        const [, status] = reading.data.S.split('|')
+                        return {
+                            id: reading.pk.S.replace(`${this.readingPrefix}|`, ''),
+                            trackerId: reading.gsi1pk.S.replace(`${this.trackerPrefix}|`, ''),
+                            status,
+                            created: reading.created.N,
+                            ...(reading.hash && { iv: reading.hash.S })
+                        }
+                    } catch (e) {
+                        return null
+                    }
+                })
+                .filter(item => item !== null),
             ...(data.nextPageKey && { nextPageKey: data.nextPageKey })
         }
     }
