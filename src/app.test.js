@@ -75,7 +75,8 @@ const mockTrackerRepository = {
     removeTrackerUtility: jest.fn().mockImplementation(() => jest.fn()),
     createReadings: jest.fn().mockImplementation(() => jest.fn()),
     getReadings: jest.fn().mockImplementation(() => jest.fn()),
-    getReading: jest.fn().mockImplementation(() => jest.fn())
+    getReading: jest.fn().mockImplementation(() => jest.fn()),
+    deleteReading: jest.fn().mockImplementation(() => jest.fn())
 }
 jest.mock('./repository/tracker.repository.js', () =>
     jest.fn().mockImplementation(() => ({
@@ -86,7 +87,8 @@ jest.mock('./repository/tracker.repository.js', () =>
         removeTrackerUtility: mockTrackerRepository.removeTrackerUtility,
         createReadings: mockTrackerRepository.createReadings,
         getReadings: mockTrackerRepository.getReadings,
-        getReading: mockTrackerRepository.getReading
+        getReading: mockTrackerRepository.getReading,
+        deleteReading: mockTrackerRepository.deleteReading
     }))
 )
 
@@ -2362,7 +2364,7 @@ describe('app', function () {
         })
     })
 
-    describe('deleted tracker utility endpoint', function () {
+    describe('delete tracker utility endpoint', function () {
         it('should return 204 when admin removes trackers utility and all is fine', async () => {
             const tokenId = '1234'
 
@@ -3047,6 +3049,64 @@ describe('app', function () {
                 error: 'ReadingNotFoundError',
                 message: 'Reading specified not found'
             })
+        })
+    })
+
+    describe('delete reading endpoint', function () {
+        it('should return 204 when admin removes reading', async () => {
+            const id = '1234'
+
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user-id-1',
+                permissions: [0]
+            }))
+
+            mockTrackerRepository.getReading.mockImplementation(() => ({
+                id
+            }))
+
+            const response = await request(app.callback()).delete(`/readings/${id}`)
+
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledWith('jwt_sub')
+
+            expect(mockTrackerRepository.deleteReading).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.deleteReading).toHaveBeenCalledWith({
+                isAdmin: true,
+                reading: { id },
+                userId: 'user-id-1'
+            })
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
+        })
+
+        it('should return 204 when user removes reading', async () => {
+            const id = '1234'
+
+            mockUserRepository.getUserByOauthId.mockImplementation(() => ({
+                id: 'user-id-1',
+                permissions: []
+            }))
+
+            mockTrackerRepository.getReading.mockImplementation(() => ({
+                id
+            }))
+
+            const response = await request(app.callback()).delete(`/readings/${id}`)
+
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledTimes(1)
+            expect(mockUserRepository.getUserByOauthId).toHaveBeenCalledWith('jwt_sub')
+
+            expect(mockTrackerRepository.deleteReading).toHaveBeenCalledTimes(1)
+            expect(mockTrackerRepository.deleteReading).toHaveBeenCalledWith({
+                isAdmin: false,
+                reading: { id },
+                userId: 'user-id-1'
+            })
+
+            expect(response.status).toBe(204)
+            expect(response.body).toEqual({})
         })
     })
 })

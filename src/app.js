@@ -398,6 +398,17 @@ router.get('/trackers/:tokenId/readings', async ctx => {
     ctx.status = 200
 })
 
+router.delete('/readings/:id', jwtAuthorize, bodyParser(), async ctx => {
+    const trackerRepository = new TrackerRepository()
+    const user = await new UserRepository().getUserByOauthId(ctx.state.jwt.sub)
+    const reading = await trackerRepository.getReading(ctx.params.id)
+
+    await trackerRepository.deleteReading({ reading, userId: user.id, isAdmin: user.permissions.includes(0) })
+
+    ctx.body = ''
+    ctx.status = 204
+})
+
 /* istanbul ignore next */
 router.get('/trackers/:tokenId/utility/meters', jwtAuthorize, async ctx => {
     const trackerRepository = new TrackerRepository()

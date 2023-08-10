@@ -111,6 +111,13 @@ export default class DynamoDbRepository {
                                     }
                                 }
                             }
+                        case 'Delete':
+                            return {
+                                Delete: {
+                                    TableName: this.table,
+                                    Key: item.key
+                                }
+                            }
                     }
                 })
             ]

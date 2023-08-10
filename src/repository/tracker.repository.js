@@ -170,6 +170,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                         gsi1pk: { S: `${this.trackerPrefix}|${trackerId}` },
                         gsi2pk: { S: `type|${this.readingPrefix}` },
                         data: { S: `${this.readingPrefix}|active|${reading.start || now}` },
+                        placeId: { S: `${this.placePrefix}|${placeId}` },
                         userId: { S: userId },
                         created: { N: now.toString() },
                         hash: { S: reading.encryptionIV }
@@ -245,6 +246,38 @@ export default class TrackerRepository extends DynamoDbRepository {
         })
     }
 
+    async deleteReading({ userId, isAdmin, reading }) {
+        await this.transactWrite({
+            items: [
+                {
+                    command: 'Delete',
+                    key: { pk: { S: `${this.readingPrefix}|${reading.id}` } }
+                },
+                {
+                    command: 'UpdateCounter',
+                    key: { pk: { S: `${this.trackerPrefix}|${reading.trackerId}` } },
+                    counters: [
+                        {
+                            name: reading.type === 'consumption' ? 'consumptionReadingCount' : 'absoluteReadingsCount',
+                            change: -1
+                        }
+                    ]
+                },
+                {
+                    command: 'UpdateCounter',
+                    key: { pk: { S: `${this.placePrefix}|${reading.placeId}` } },
+                    counters: [
+                        {
+                            name: reading.type === 'consumption' ? 'consumptionReadingCount' : 'absoluteReadingsCount',
+                            change: -1
+                        }
+                    ]
+                }
+            ],
+            conditions: !isAdmin ? [this.checkTrackerBelongsToUser(reading.trackerId, userId)] : []
+        })
+    }
+
     async getReadings({ trackerId, status, sort, pageSize, nextPageKey }) {
         const forward = sort && sort === 'desc' ? false : true
         let condition = 'gsi1pk = :gsi1pk'
@@ -300,6 +333,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                 const [, status, date] = data.Item.data.S.split('|')
                 return {
                     id: data.Item.pk.S.replace(`${this.readingPrefix}|`, ''),
+                    placeId: data.Item.placeId?.S,
                     userId: data.Item.userId?.S,
                     status,
                     created: data.Item.created.N,
@@ -326,6 +360,29 @@ export default class TrackerRepository extends DynamoDbRepository {
         return data.map(item => {
             const [, , start, end] = item.pk.S.split('|')
             return { start, end }
+        })
+    }
+
+    async getReadingsById(ids) {
+        const data = await this.batchGetItems({
+            keys: ids.map(id => ({
+                pk: { S: `${this.readingPrefix}|${id}` }
+            })),
+            projection: 'pk'
+        })
+
+        return data.map(item => {
+            const [, status, date] = item.data.S.split('|')
+            return {
+                id: item.pk.S.replace(`${this.readingPrefix}|`, ''),
+                trackerId: item.gsi1pk.S.replace(`${this.trackerPrefix}|`, ''),
+                placeId: item.placeId?.S,
+                userId: item.userId?.S,
+                status,
+                created: item.created?.N,
+                lastModified: date,
+                ...(item.hash && { iv: data.Item.hash.S })
+            }
         })
     }
 }

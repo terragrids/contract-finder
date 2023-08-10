@@ -1,4 +1,4 @@
-import { TypePositiveNumberError } from '../error/type-positive-number.error copy.js'
+import { TypePositiveNumberError } from '../error/type-positive-number.error.js'
 
 export const isNumber = number => {
     if (isNaN(number) || typeof number !== 'number') return false
