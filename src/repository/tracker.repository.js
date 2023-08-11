@@ -168,7 +168,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                     data: {
                         pk: { S: `${this.readingPrefix}|${reading.id}` },
                         gsi1pk: { S: `${this.trackerPrefix}|${trackerId}` },
-                        gsi2pk: { S: `type|${this.readingPrefix}` },
+                        gsi2pk: { S: `type|${this.readingPrefix}|${reading.type}` },
                         data: { S: `${this.readingPrefix}|active|${reading.start || now}` },
                         placeId: { S: `${this.placePrefix}|${placeId}` },
                         userId: { S: userId },
@@ -333,8 +333,10 @@ export default class TrackerRepository extends DynamoDbRepository {
                 const [, status, date] = data.Item.data.S.split('|')
                 return {
                     id: data.Item.pk.S.replace(`${this.readingPrefix}|`, ''),
-                    placeId: data.Item.placeId?.S,
-                    userId: data.Item.userId?.S,
+                    trackerId: data.Item.gsi1pk.S.replace(`${this.trackerPrefix}|`, ''),
+                    placeId: data.Item.placeId.S,
+                    userId: data.Item.userId.S,
+                    type: data.Item.gsi2pk.S.replace(`type|${this.readingPrefix}|`, ''),
                     status,
                     created: data.Item.created.N,
                     lastModified: date,
