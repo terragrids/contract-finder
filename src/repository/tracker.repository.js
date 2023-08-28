@@ -170,7 +170,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                         gsi1pk: { S: `${this.trackerPrefix}|${trackerId}` },
                         gsi2pk: { S: `type|${this.readingPrefix}|${reading.type}` },
                         data: { S: `${this.readingPrefix}|active|${reading.start || now}` },
-                        placeId: { S: `${this.placePrefix}|${placeId}` },
+                        placeId: { S: placeId },
                         userId: { S: userId },
                         created: { N: now.toString() },
                         hash: { S: reading.encryptionIV }
@@ -220,7 +220,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                               key: { pk: { S: `${this.trackerPrefix}|${trackerId}` } },
                               counters: [
                                   {
-                                      name: 'absoluteReadingsCount',
+                                      name: 'absoluteReadingCount',
                                       change: absoluteReadings.length
                                   }
                               ]
@@ -234,7 +234,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                               key: { pk: { S: `${this.placePrefix}|${placeId}` } },
                               counters: [
                                   {
-                                      name: 'absoluteReadingsCount',
+                                      name: 'absoluteReadingCount',
                                       change: absoluteReadings.length
                                   }
                               ]
@@ -258,7 +258,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                     key: { pk: { S: `${this.trackerPrefix}|${reading.trackerId}` } },
                     counters: [
                         {
-                            name: reading.type === 'consumption' ? 'consumptionReadingCount' : 'absoluteReadingsCount',
+                            name: reading.type === 'consumption' ? 'consumptionReadingCount' : 'absoluteReadingCount',
                             change: -1
                         }
                     ]
@@ -268,7 +268,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                     key: { pk: { S: `${this.placePrefix}|${reading.placeId}` } },
                     counters: [
                         {
-                            name: reading.type === 'consumption' ? 'consumptionReadingCount' : 'absoluteReadingsCount',
+                            name: reading.type === 'consumption' ? 'consumptionReadingCount' : 'absoluteReadingCount',
                             change: -1
                         }
                     ]
