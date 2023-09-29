@@ -345,6 +345,7 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
             id: txnResults[index].id,
             type: reading.type,
             encryptionIV: ivs[index],
+            value: reading.value,
             ...(reading.start && { start: reading.start }),
             ...(reading.end && { end: reading.end })
         }))

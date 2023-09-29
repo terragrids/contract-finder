@@ -2523,6 +2523,7 @@ describe('app', function () {
                     {
                         id: 'txn_id_1',
                         encryptionIV: 'enc-iv',
+                        value: '0.123',
                         start: '12345',
                         end: '67890',
                         type: 'consumption'
@@ -2530,6 +2531,7 @@ describe('app', function () {
                     {
                         id: 'txn_id_2',
                         encryptionIV: 'enc-iv',
+                        value: '12345',
                         type: 'absolute'
                     }
                 ]

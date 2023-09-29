@@ -156,19 +156,60 @@ export default class TrackerRepository extends DynamoDbRepository {
     }
 
     async createReadings({ trackerId, placeId, userId, isAdmin, readings }) {
+        if (!readings || readings.length === 0) return
+
         const now = Date.now()
 
-        const consumptionReadings = readings.filter(reading => reading.type === 'consumption' && reading.start !== undefined && reading.end !== undefined)
+        const consumptionReadings = readings.filter(
+            reading => reading.type === 'consumption' && reading.frequency !== undefined && reading.value !== undefined && reading.start !== undefined && reading.end !== undefined
+        )
         const absoluteReadings = readings.filter(reading => reading.type === 'absolute')
+        const validReadings = [...consumptionReadings, ...absoluteReadings]
+
+        // Update consumption reading count and total consumption by frequency
+        const freqReadings = {}
+        const freqConsumptions = {}
+        for (const reading of consumptionReadings) {
+            freqReadings[reading.frequency] = freqReadings[reading.frequency] ? freqReadings[reading.frequency] + 1 : 1
+            freqConsumptions[reading.frequency] = freqConsumptions[reading.frequency] ? freqConsumptions[reading.frequency] + reading.value : reading.value
+        }
+
+        const freqCounters = []
+        for (const freq in freqReadings) {
+            freqCounters.push({
+                command: 'UpdateCounter',
+                key: { pk: { S: `${this.trackerPrefix}|${trackerId}` } },
+                counters: [
+                    {
+                        name: `consumption${freq[0].toUpperCase() + freq.slice(1)}ReadingCount`,
+                        change: freqReadings[freq]
+                    }
+                ]
+            })
+        }
+
+        const freqValues = []
+        for (const freq in freqConsumptions) {
+            freqValues.push({
+                command: 'UpdateCounter',
+                key: { pk: { S: `${this.trackerPrefix}|${trackerId}` } },
+                counters: [
+                    {
+                        name: `consumption${freq[0].toUpperCase() + freq.slice(1)}ReadingTotal`,
+                        change: freqConsumptions[freq]
+                    }
+                ]
+            })
+        }
 
         await this.transactWrite({
             items: [
-                ...readings.map(reading => ({
+                ...validReadings.map(reading => ({
                     command: 'Put',
                     data: {
                         pk: { S: `${this.readingPrefix}|${reading.id}` },
                         gsi1pk: { S: `${this.trackerPrefix}|${trackerId}` },
-                        gsi2pk: { S: `type|${this.readingPrefix}|${reading.type}` },
+                        gsi2pk: { S: `type|${this.readingPrefix}|${reading.type}${reading.frequency ? `|${reading.frequency}` : ''}` },
                         data: { S: `${this.readingPrefix}|active|${reading.start || now}` },
                         placeId: { S: placeId },
                         userId: { S: userId },
@@ -197,6 +238,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                                   }
                               ]
                           }
+                          // TODO add daily, weekly, monthly reading counts and accumulators to calculate overall averages
                       ]
                     : []),
                 ...(consumptionReadings.length
@@ -240,7 +282,9 @@ export default class TrackerRepository extends DynamoDbRepository {
                               ]
                           }
                       ]
-                    : [])
+                    : []),
+                ...freqCounters,
+                ...freqValues
             ],
             conditions: !isAdmin ? [this.checkTrackerBelongsToUser(trackerId, userId)] : []
         })
