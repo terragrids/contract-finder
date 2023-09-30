@@ -2498,6 +2498,7 @@ describe('app', function () {
                             type: 'consumption',
                             value: '0.123',
                             unit: 'kwh',
+                            frequency: 'weekly',
                             start: '12345',
                             end: '67890'
                         },
@@ -2524,6 +2525,7 @@ describe('app', function () {
                         id: 'txn_id_1',
                         encryptionIV: 'enc-iv',
                         value: '0.123',
+                        frequency: 'weekly',
                         start: '12345',
                         end: '67890',
                         type: 'consumption'
@@ -2635,6 +2637,75 @@ describe('app', function () {
             expect(response.body).toEqual({
                 error: 'MissingParameterError',
                 message: 'unit must be specified'
+            })
+        })
+
+        it('should return 400 when consumption reading is without frequency', async () => {
+            const response = await request(app.callback())
+                .post('/readings')
+                .send({
+                    trackerId: '12345',
+                    readings: [
+                        {
+                            type: 'consumption',
+                            start: 'start',
+                            end: 'end',
+                            value: '0.45',
+                            unit: 'kWh'
+                        }
+                    ]
+                })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'consumption frequency must be specified'
+            })
+        })
+
+        it('should return 400 when consumption reading is without start date', async () => {
+            const response = await request(app.callback())
+                .post('/readings')
+                .send({
+                    trackerId: '12345',
+                    readings: [
+                        {
+                            type: 'consumption',
+                            frequency: 'weekly',
+                            end: 'end',
+                            value: '0.45',
+                            unit: 'kWh'
+                        }
+                    ]
+                })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'consumption start must be specified'
+            })
+        })
+
+        it('should return 400 when consumption reading is without end date', async () => {
+            const response = await request(app.callback())
+                .post('/readings')
+                .send({
+                    trackerId: '12345',
+                    readings: [
+                        {
+                            type: 'consumption',
+                            frequency: 'weekly',
+                            start: 'start',
+                            value: '0.45',
+                            unit: 'kWh'
+                        }
+                    ]
+                })
+
+            expect(response.status).toBe(400)
+            expect(response.body).toEqual({
+                error: 'MissingParameterError',
+                message: 'consumption end must be specified'
             })
         })
     })

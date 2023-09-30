@@ -299,10 +299,17 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
     if (!ctx.request.body.trackerId) throw new MissingParameterError('trackerId')
     if (!ctx.request.body.readings) throw new MissingParameterError('readings')
     if (!ctx.request.body.readings.length) throw new ParameterNotArrayError('readings')
+
     for (const reading of ctx.request.body.readings) {
         if (!reading.type) throw new MissingParameterError('type')
         if (!reading.value) throw new MissingParameterError('value')
         if (!reading.unit) throw new MissingParameterError('unit')
+
+        if (reading.type === 'consumption') {
+            if (!reading.frequency) throw new MissingParameterError('consumption frequency')
+            if (!reading.start) throw new MissingParameterError('consumption start')
+            if (!reading.end) throw new MissingParameterError('consumption end')
+        }
     }
 
     const stdlib = new ReachProvider().getStdlib()
@@ -345,11 +352,14 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
             id: txnResults[index].id,
             type: reading.type,
             encryptionIV: ivs[index],
+            frequency: reading.frequency,
             value: reading.value,
             ...(reading.start && { start: reading.start }),
             ...(reading.end && { end: reading.end })
         }))
     })
+
+    // todo: update tracker nft
 
     ctx.body = ''
     ctx.status = 201

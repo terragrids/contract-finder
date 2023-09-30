@@ -99,6 +99,13 @@ export default class TrackerRepository extends DynamoDbRepository {
                     ...(data.Item.meterSerialNumber && { meterSerialNumber: data.Item.meterSerialNumber.S }),
                     ...(data.Item.consumptionReadingCount && { consumptionReadingCount: data.Item.consumptionReadingCount.N }),
                     ...(data.Item.absoluteReadingCount && { absoluteReadingCount: data.Item.absoluteReadingCount.N }),
+                    ...(data.Item.consumptionDailyReadingCount && { consumptionDailyAverage: parseInt(data.Item.consumptionDailyReadingTotal.N) / parseInt(data.Item.consumptionDailyReadingCount.N) }),
+                    ...(data.Item.consumptionWeeklyReadingCount && {
+                        consumptionWeeklyAverage: parseInt(data.Item.consumptionWeeklyReadingTotal.N) / parseInt(data.Item.consumptionWeeklyReadingCount.N)
+                    }),
+                    ...(data.Item.consumptionMonthlyReadingCount && {
+                        consumptionMonthlyAverage: parseInt(data.Item.consumptionMonthlyReadingCount.N) / parseInt(data.Item.consumptionMonthlyReadingCount.N)
+                    }),
                     created: data.Item.created.N,
                     lastModified: date
                 }
