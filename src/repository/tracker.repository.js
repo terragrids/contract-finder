@@ -99,12 +99,14 @@ export default class TrackerRepository extends DynamoDbRepository {
                     ...(data.Item.meterSerialNumber && { meterSerialNumber: data.Item.meterSerialNumber.S }),
                     ...(data.Item.consumptionReadingCount && { consumptionReadingCount: data.Item.consumptionReadingCount.N }),
                     ...(data.Item.absoluteReadingCount && { absoluteReadingCount: data.Item.absoluteReadingCount.N }),
-                    ...(data.Item.consumptionDailyReadingCount && { consumptionDailyAverage: parseInt(data.Item.consumptionDailyReadingTotal.N) / parseInt(data.Item.consumptionDailyReadingCount.N) }),
+                    ...(data.Item.consumptionDailyReadingCount && {
+                        consumptionDailyAverage: parseFloat(data.Item.consumptionDailyReadingTotal.N) / parseInt(data.Item.consumptionDailyReadingCount.N)
+                    }),
                     ...(data.Item.consumptionWeeklyReadingCount && {
-                        consumptionWeeklyAverage: parseInt(data.Item.consumptionWeeklyReadingTotal.N) / parseInt(data.Item.consumptionWeeklyReadingCount.N)
+                        consumptionWeeklyAverage: parseFloat(data.Item.consumptionWeeklyReadingTotal.N) / parseInt(data.Item.consumptionWeeklyReadingCount.N)
                     }),
                     ...(data.Item.consumptionMonthlyReadingCount && {
-                        consumptionMonthlyAverage: parseInt(data.Item.consumptionMonthlyReadingCount.N) / parseInt(data.Item.consumptionMonthlyReadingCount.N)
+                        consumptionMonthlyAverage: parseFloat(data.Item.consumptionMonthlyReadingCount.N) / parseInt(data.Item.consumptionMonthlyReadingCount.N)
                     }),
                     created: data.Item.created.N,
                     lastModified: date
@@ -178,34 +180,23 @@ export default class TrackerRepository extends DynamoDbRepository {
         const freqConsumptions = {}
         for (const reading of consumptionReadings) {
             freqReadings[reading.frequency] = freqReadings[reading.frequency] ? freqReadings[reading.frequency] + 1 : 1
-            freqConsumptions[reading.frequency] = freqConsumptions[reading.frequency] ? freqConsumptions[reading.frequency] + reading.value : reading.value
+            const value = parseFloat(reading.value)
+            freqConsumptions[reading.frequency] = freqConsumptions[reading.frequency] ? freqConsumptions[reading.frequency] + value : value
         }
 
         const freqCounters = []
         for (const freq in freqReadings) {
             freqCounters.push({
-                command: 'UpdateCounter',
-                key: { pk: { S: `${this.trackerPrefix}|${trackerId}` } },
-                counters: [
-                    {
-                        name: `consumption${freq[0].toUpperCase() + freq.slice(1)}ReadingCount`,
-                        change: freqReadings[freq]
-                    }
-                ]
+                name: `consumption${freq[0].toUpperCase() + freq.slice(1)}ReadingCount`,
+                change: freqReadings[freq]
             })
         }
 
-        const freqValues = []
+        const freqTotals = []
         for (const freq in freqConsumptions) {
-            freqValues.push({
-                command: 'UpdateCounter',
-                key: { pk: { S: `${this.trackerPrefix}|${trackerId}` } },
-                counters: [
-                    {
-                        name: `consumption${freq[0].toUpperCase() + freq.slice(1)}ReadingTotal`,
-                        change: freqConsumptions[freq]
-                    }
-                ]
+            freqTotals.push({
+                name: `consumption${freq[0].toUpperCase() + freq.slice(1)}ReadingTotal`,
+                change: freqConsumptions[freq]
             })
         }
 
@@ -242,10 +233,11 @@ export default class TrackerRepository extends DynamoDbRepository {
                                   {
                                       name: 'consumptionReadingCount',
                                       change: consumptionReadings.length
-                                  }
+                                  },
+                                  ...freqCounters,
+                                  ...freqTotals
                               ]
                           }
-                          // TODO add daily, weekly, monthly reading counts and accumulators to calculate overall averages
                       ]
                     : []),
                 ...(consumptionReadings.length
@@ -289,9 +281,7 @@ export default class TrackerRepository extends DynamoDbRepository {
                               ]
                           }
                       ]
-                    : []),
-                ...freqCounters,
-                ...freqValues
+                    : [])
             ],
             conditions: !isAdmin ? [this.checkTrackerBelongsToUser(trackerId, userId)] : []
         })

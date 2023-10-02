@@ -335,6 +335,7 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
             value: encryptedData,
             unit: reading.unit,
             encryption: 'aes256',
+            ...(reading.frequency && { frequency: reading.frequency }),
             ...(reading.start && { start: reading.start }),
             ...(reading.end && { end: reading.end })
         }
@@ -389,7 +390,7 @@ router.get('/trackers/:tokenId/readings', async ctx => {
                         var note = JSON.parse(Buffer.from(response.json.transaction.note, 'base64'))
                         const value = note.encryption === 'aes256' ? aes256decrypt(note.value, reading.iv) : note.value
                         const type = note.type ? note.type.replace('terragrids-reading-', '') : undefined
-                        return { ...reading, iv: undefined, value, unit: note.unit, type, start: note.start, end: note.end }
+                        return { ...reading, iv: undefined, value, unit: note.unit, type, frequency: note.frequency, start: note.start, end: note.end }
                     } catch (e) {
                         return null
                     }

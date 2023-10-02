@@ -294,103 +294,21 @@ describe('tracker.repository', function () {
                         command: 'UpdateCounter',
                         counters: [
                             {
-                                change: 3,
-                                name: 'consumptionReadingCount'
-                            }
-                        ],
-                        key: {
-                            pk: {
-                                S: 'tracker|tracker-id'
-                            }
-                        }
-                    },
-                    {
-                        command: 'UpdateCounter',
-                        counters: [
-                            {
-                                change: 3,
-                                name: 'consumptionReadingCount'
-                            }
-                        ],
-                        key: {
-                            pk: {
-                                S: 'place|place-id'
-                            }
-                        }
-                    },
-                    {
-                        command: 'UpdateCounter',
-                        counters: [
-                            {
-                                change: 1,
-                                name: 'absoluteReadingCount'
-                            }
-                        ],
-                        key: {
-                            pk: {
-                                S: 'tracker|tracker-id'
-                            }
-                        }
-                    },
-                    {
-                        command: 'UpdateCounter',
-                        counters: [
-                            {
-                                change: 1,
-                                name: 'absoluteReadingCount'
-                            }
-                        ],
-                        key: {
-                            pk: {
-                                S: 'place|place-id'
-                            }
-                        }
-                    },
-                    {
-                        command: 'UpdateCounter',
-                        key: {
-                            pk: {
-                                S: 'tracker|tracker-id'
-                            }
-                        },
-                        counters: [
+                                name: 'consumptionReadingCount',
+                                change: 3
+                            },
                             {
                                 name: 'consumptionWeeklyReadingCount',
                                 change: 2
-                            }
-                        ]
-                    },
-                    {
-                        command: 'UpdateCounter',
-                        key: {
-                            pk: {
-                                S: 'tracker|tracker-id'
-                            }
-                        },
-                        counters: [
+                            },
                             {
                                 name: 'consumptionDailyReadingCount',
                                 change: 1
-                            }
-                        ]
-                    },
-                    {
-                        command: 'UpdateCounter',
-                        counters: [
+                            },
                             {
                                 change: 201,
                                 name: 'consumptionWeeklyReadingTotal'
-                            }
-                        ],
-                        key: {
-                            pk: {
-                                S: 'tracker|tracker-id'
-                            }
-                        }
-                    },
-                    {
-                        command: 'UpdateCounter',
-                        counters: [
+                            },
                             {
                                 change: 102,
                                 name: 'consumptionDailyReadingTotal'
@@ -399,6 +317,48 @@ describe('tracker.repository', function () {
                         key: {
                             pk: {
                                 S: 'tracker|tracker-id'
+                            }
+                        }
+                    },
+                    {
+                        command: 'UpdateCounter',
+                        counters: [
+                            {
+                                change: 3,
+                                name: 'consumptionReadingCount'
+                            }
+                        ],
+                        key: {
+                            pk: {
+                                S: 'place|place-id'
+                            }
+                        }
+                    },
+                    {
+                        command: 'UpdateCounter',
+                        counters: [
+                            {
+                                change: 1,
+                                name: 'absoluteReadingCount'
+                            }
+                        ],
+                        key: {
+                            pk: {
+                                S: 'tracker|tracker-id'
+                            }
+                        }
+                    },
+                    {
+                        command: 'UpdateCounter',
+                        counters: [
+                            {
+                                change: 1,
+                                name: 'absoluteReadingCount'
+                            }
+                        ],
+                        key: {
+                            pk: {
+                                S: 'place|place-id'
                             }
                         }
                     }
