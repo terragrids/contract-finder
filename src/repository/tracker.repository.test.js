@@ -42,7 +42,7 @@ describe('tracker.repository', function () {
                     {
                         id: 'reading-1',
                         type: 'consumption',
-                        frequency: 'weekly',
+                        cycle: 'weekly',
                         value: 100,
                         start: 1,
                         end: 2,
@@ -51,7 +51,7 @@ describe('tracker.repository', function () {
                     {
                         id: 'reading-2',
                         type: 'consumption',
-                        frequency: 'weekly',
+                        cycle: 'weekly',
                         value: 101,
                         start: 3,
                         end: 4,
@@ -60,7 +60,7 @@ describe('tracker.repository', function () {
                     {
                         id: 'reading-3',
                         type: 'consumption',
-                        frequency: 'daily',
+                        cycle: 'daily',
                         value: 102,
                         start: 5,
                         end: 6,
@@ -71,7 +71,7 @@ describe('tracker.repository', function () {
                         type: 'absolute',
                         encryptionIV: 'encryption-iv'
                     },
-                    // no frequency
+                    // no cycle
                     {
                         id: 'reading-5',
                         type: 'consumption',
@@ -84,7 +84,7 @@ describe('tracker.repository', function () {
                     {
                         id: 'reading-6',
                         type: 'consumption',
-                        frequency: 'daily',
+                        cycle: 'daily',
                         start: 1,
                         end: 2,
                         encryptionIV: 'encryption-iv'
@@ -93,7 +93,7 @@ describe('tracker.repository', function () {
                     {
                         id: 'reading-7',
                         type: 'consumption',
-                        frequency: 'daily',
+                        cycle: 'daily',
                         value: 55,
                         end: 2,
                         encryptionIV: 'encryption-iv'
@@ -102,7 +102,7 @@ describe('tracker.repository', function () {
                     {
                         id: 'reading-8',
                         type: 'consumption',
-                        frequency: 'daily',
+                        cycle: 'daily',
                         value: 55,
                         start: 2,
                         encryptionIV: 'encryption-iv'
@@ -111,7 +111,7 @@ describe('tracker.repository', function () {
                     {
                         id: 'reading-9',
                         type: 'unknown',
-                        frequency: 'daily',
+                        cycle: 'daily',
                         value: 55,
                         start: 2,
                         end: 3,
@@ -130,7 +130,7 @@ describe('tracker.repository', function () {
                                 N: '1695118830000'
                             },
                             data: {
-                                S: 'reading|active|1'
+                                S: 'reading|active|consumption|1'
                             },
                             gsi1pk: {
                                 S: 'tracker|tracker-id'
@@ -159,7 +159,7 @@ describe('tracker.repository', function () {
                                 N: '1695118830000'
                             },
                             data: {
-                                S: 'reading|active|3'
+                                S: 'reading|active|consumption|3'
                             },
                             gsi1pk: {
                                 S: 'tracker|tracker-id'
@@ -188,7 +188,7 @@ describe('tracker.repository', function () {
                                 N: '1695118830000'
                             },
                             data: {
-                                S: 'reading|active|5'
+                                S: 'reading|active|consumption|5'
                             },
                             gsi1pk: {
                                 S: 'tracker|tracker-id'
@@ -217,7 +217,7 @@ describe('tracker.repository', function () {
                                 N: '1695118830000'
                             },
                             data: {
-                                S: 'reading|active|1695118830000'
+                                S: 'reading|active|absolute|1695118830000'
                             },
                             gsi1pk: {
                                 S: 'tracker|tracker-id'

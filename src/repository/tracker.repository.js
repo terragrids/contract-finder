@@ -170,33 +170,33 @@ export default class TrackerRepository extends DynamoDbRepository {
         const now = Date.now()
 
         const consumptionReadings = readings.filter(
-            reading => reading.type === 'consumption' && reading.frequency !== undefined && reading.value !== undefined && reading.start !== undefined && reading.end !== undefined
+            reading => reading.type === 'consumption' && reading.cycle !== undefined && reading.value !== undefined && reading.start !== undefined && reading.end !== undefined
         )
         const absoluteReadings = readings.filter(reading => reading.type === 'absolute')
         const validReadings = [...consumptionReadings, ...absoluteReadings]
 
-        // Update consumption reading count and total consumption by frequency
-        const freqReadings = {}
-        const freqConsumptions = {}
+        // Update consumption reading count and total consumption by cycle
+        const cycleReadings = {}
+        const cycleConsumptions = {}
         for (const reading of consumptionReadings) {
-            freqReadings[reading.frequency] = freqReadings[reading.frequency] ? freqReadings[reading.frequency] + 1 : 1
+            cycleReadings[reading.cycle] = cycleReadings[reading.cycle] ? cycleReadings[reading.cycle] + 1 : 1
             const value = parseFloat(reading.value)
-            freqConsumptions[reading.frequency] = freqConsumptions[reading.frequency] ? freqConsumptions[reading.frequency] + value : value
+            cycleConsumptions[reading.cycle] = cycleConsumptions[reading.cycle] ? cycleConsumptions[reading.cycle] + value : value
         }
 
-        const freqCounters = []
-        for (const freq in freqReadings) {
-            freqCounters.push({
-                name: `consumption${freq[0].toUpperCase() + freq.slice(1)}ReadingCount`,
-                change: freqReadings[freq]
+        const cycleCounters = []
+        for (const cycle in cycleReadings) {
+            cycleCounters.push({
+                name: `consumption${cycle[0].toUpperCase() + cycle.slice(1)}ReadingCount`,
+                change: cycleReadings[cycle]
             })
         }
 
-        const freqTotals = []
-        for (const freq in freqConsumptions) {
-            freqTotals.push({
-                name: `consumption${freq[0].toUpperCase() + freq.slice(1)}ReadingTotal`,
-                change: freqConsumptions[freq]
+        const cycleTotals = []
+        for (const cycle in cycleConsumptions) {
+            cycleTotals.push({
+                name: `consumption${cycle[0].toUpperCase() + cycle.slice(1)}ReadingTotal`,
+                change: cycleConsumptions[cycle]
             })
         }
 
@@ -207,8 +207,8 @@ export default class TrackerRepository extends DynamoDbRepository {
                     data: {
                         pk: { S: `${this.readingPrefix}|${reading.id}` },
                         gsi1pk: { S: `${this.trackerPrefix}|${trackerId}` },
-                        gsi2pk: { S: `type|${this.readingPrefix}|${reading.type}${reading.frequency ? `|${reading.frequency}` : ''}` },
-                        data: { S: `${this.readingPrefix}|active|${reading.start || now}` },
+                        gsi2pk: { S: `type|${this.readingPrefix}|${reading.type}${reading.cycle ? `|${reading.cycle}` : ''}` },
+                        data: { S: `${this.readingPrefix}|active|${reading.type}|${reading.start || now}` },
                         placeId: { S: placeId },
                         userId: { S: userId },
                         created: { N: now.toString() },
@@ -234,8 +234,8 @@ export default class TrackerRepository extends DynamoDbRepository {
                                       name: 'consumptionReadingCount',
                                       change: consumptionReadings.length
                                   },
-                                  ...freqCounters,
-                                  ...freqTotals
+                                  ...cycleCounters,
+                                  ...cycleTotals
                               ]
                           }
                       ]
@@ -319,7 +319,7 @@ export default class TrackerRepository extends DynamoDbRepository {
         })
     }
 
-    async getReadings({ trackerId, status, sort, pageSize, nextPageKey }) {
+    async getReadings({ trackerId, status, cycle, sort, pageSize, nextPageKey }) {
         const forward = sort && sort === 'desc' ? false : true
         let condition = 'gsi1pk = :gsi1pk'
         let filter
@@ -327,6 +327,10 @@ export default class TrackerRepository extends DynamoDbRepository {
         if (status) {
             condition = `${condition} AND begins_with(#data, :filter)`
             filter = `${this.readingPrefix}|${status}`
+
+            if (cycle) {
+                filter = `${filter}|${cycle}`
+            }
         }
 
         const data = await this.query({

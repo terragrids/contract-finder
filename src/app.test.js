@@ -2498,7 +2498,7 @@ describe('app', function () {
                             type: 'consumption',
                             value: '0.123',
                             unit: 'kwh',
-                            frequency: 'weekly',
+                            cycle: 'weekly',
                             start: '12345',
                             end: '67890'
                         },
@@ -2525,7 +2525,7 @@ describe('app', function () {
                         id: 'txn_id_1',
                         encryptionIV: 'enc-iv',
                         value: '0.123',
-                        frequency: 'weekly',
+                        cycle: 'weekly',
                         start: '12345',
                         end: '67890',
                         type: 'consumption'
@@ -2640,7 +2640,7 @@ describe('app', function () {
             })
         })
 
-        it('should return 400 when consumption reading is without frequency', async () => {
+        it('should return 400 when consumption reading is without cycle', async () => {
             const response = await request(app.callback())
                 .post('/readings')
                 .send({
@@ -2659,7 +2659,7 @@ describe('app', function () {
             expect(response.status).toBe(400)
             expect(response.body).toEqual({
                 error: 'MissingParameterError',
-                message: 'consumption frequency must be specified'
+                message: 'consumption cycle must be specified'
             })
         })
 
@@ -2671,7 +2671,7 @@ describe('app', function () {
                     readings: [
                         {
                             type: 'consumption',
-                            frequency: 'weekly',
+                            cycle: 'weekly',
                             end: 'end',
                             value: '0.45',
                             unit: 'kWh'
@@ -2694,7 +2694,7 @@ describe('app', function () {
                     readings: [
                         {
                             type: 'consumption',
-                            frequency: 'weekly',
+                            cycle: 'weekly',
                             start: 'start',
                             value: '0.45',
                             unit: 'kWh'

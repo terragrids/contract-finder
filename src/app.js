@@ -306,7 +306,7 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
         if (!reading.unit) throw new MissingParameterError('unit')
 
         if (reading.type === 'consumption') {
-            if (!reading.frequency) throw new MissingParameterError('consumption frequency')
+            if (!reading.cycle) throw new MissingParameterError('consumption cycle')
             if (!reading.start) throw new MissingParameterError('consumption start')
             if (!reading.end) throw new MissingParameterError('consumption end')
         }
@@ -335,7 +335,7 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
             value: encryptedData,
             unit: reading.unit,
             encryption: 'aes256',
-            ...(reading.frequency && { frequency: reading.frequency }),
+            ...(reading.cycle && { cycle: reading.cycle }),
             ...(reading.start && { start: reading.start }),
             ...(reading.end && { end: reading.end })
         }
@@ -353,7 +353,7 @@ router.post('/readings', jwtAuthorize, bodyParser(), async ctx => {
             id: txnResults[index].id,
             type: reading.type,
             encryptionIV: ivs[index],
-            frequency: reading.frequency,
+            cycle: reading.cycle,
             value: reading.value,
             ...(reading.start && { start: reading.start }),
             ...(reading.end && { end: reading.end })
@@ -371,6 +371,7 @@ router.get('/trackers/:tokenId/readings', async ctx => {
         trackerId: ctx.params.tokenId,
         sort: ctx.request.query.sort,
         status: ctx.request.query.status,
+        cycle: ctx.request.query.cycle,
         pageSize: ctx.request.query.pageSize,
         nextPageKey: ctx.request.query.nextPageKey
     })
@@ -390,7 +391,7 @@ router.get('/trackers/:tokenId/readings', async ctx => {
                         var note = JSON.parse(Buffer.from(response.json.transaction.note, 'base64'))
                         const value = note.encryption === 'aes256' ? aes256decrypt(note.value, reading.iv) : note.value
                         const type = note.type ? note.type.replace('terragrids-reading-', '') : undefined
-                        return { ...reading, iv: undefined, value, unit: note.unit, type, frequency: note.frequency, start: note.start, end: note.end }
+                        return { ...reading, iv: undefined, value, unit: note.unit, type, cycle: note.cycle, start: note.start, end: note.end }
                     } catch (e) {
                         return null
                     }
