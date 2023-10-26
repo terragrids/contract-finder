@@ -130,13 +130,13 @@ describe('tracker.repository', function () {
                                 N: '1695118830000'
                             },
                             data: {
-                                S: 'reading|active|consumption|1'
+                                S: 'reading|active|weekly|1'
                             },
                             gsi1pk: {
                                 S: 'tracker|tracker-id'
                             },
                             gsi2pk: {
-                                S: 'type|reading|consumption|weekly'
+                                S: 'type|reading|consumption'
                             },
                             hash: {
                                 S: 'encryption-iv'
@@ -159,13 +159,13 @@ describe('tracker.repository', function () {
                                 N: '1695118830000'
                             },
                             data: {
-                                S: 'reading|active|consumption|3'
+                                S: 'reading|active|weekly|3'
                             },
                             gsi1pk: {
                                 S: 'tracker|tracker-id'
                             },
                             gsi2pk: {
-                                S: 'type|reading|consumption|weekly'
+                                S: 'type|reading|consumption'
                             },
                             hash: {
                                 S: 'encryption-iv'
@@ -188,13 +188,13 @@ describe('tracker.repository', function () {
                                 N: '1695118830000'
                             },
                             data: {
-                                S: 'reading|active|consumption|5'
+                                S: 'reading|active|daily|5'
                             },
                             gsi1pk: {
                                 S: 'tracker|tracker-id'
                             },
                             gsi2pk: {
-                                S: 'type|reading|consumption|daily'
+                                S: 'type|reading|consumption'
                             },
                             hash: {
                                 S: 'encryption-iv'

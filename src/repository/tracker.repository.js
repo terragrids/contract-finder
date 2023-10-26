@@ -172,7 +172,7 @@ export default class TrackerRepository extends DynamoDbRepository {
         const consumptionReadings = readings.filter(
             reading => reading.type === 'consumption' && reading.cycle !== undefined && reading.value !== undefined && reading.start !== undefined && reading.end !== undefined
         )
-        const absoluteReadings = readings.filter(reading => reading.type === 'absolute')
+        const absoluteReadings = readings.filter(reading => reading.type === 'absolute').map(reading => ({ ...reading, cycle: 'absolute' }))
         const validReadings = [...consumptionReadings, ...absoluteReadings]
 
         // Update consumption reading count and total consumption by cycle
@@ -207,8 +207,8 @@ export default class TrackerRepository extends DynamoDbRepository {
                     data: {
                         pk: { S: `${this.readingPrefix}|${reading.id}` },
                         gsi1pk: { S: `${this.trackerPrefix}|${trackerId}` },
-                        gsi2pk: { S: `type|${this.readingPrefix}|${reading.type}${reading.cycle ? `|${reading.cycle}` : ''}` },
-                        data: { S: `${this.readingPrefix}|active|${reading.type}|${reading.start || now}` },
+                        gsi2pk: { S: `type|${this.readingPrefix}|${reading.type}` },
+                        data: { S: `${this.readingPrefix}|active|${reading.cycle}|${reading.start || now}` },
                         placeId: { S: placeId },
                         userId: { S: userId },
                         created: { N: now.toString() },
@@ -321,16 +321,20 @@ export default class TrackerRepository extends DynamoDbRepository {
 
     async getReadings({ trackerId, status, cycle, sort, pageSize, nextPageKey }) {
         const forward = sort && sort === 'desc' ? false : true
+
         let condition = 'gsi1pk = :gsi1pk'
+        if (status || cycle) {
+            condition = `${condition} AND begins_with(#data, :data)`
+        }
+
         let filter
-
         if (status) {
-            condition = `${condition} AND begins_with(#data, :filter)`
             filter = `${this.readingPrefix}|${status}`
-
-            if (cycle) {
-                filter = `${filter}|${cycle}`
-            }
+        } else {
+            filter = `${this.readingPrefix}|active`
+        }
+        if (cycle) {
+            filter = `${filter}|${cycle}`
         }
 
         const data = await this.query({
@@ -339,7 +343,7 @@ export default class TrackerRepository extends DynamoDbRepository {
             ...(filter && { attributeNames: { '#data': 'data' } }),
             attributeValues: {
                 ':gsi1pk': { S: `${this.trackerPrefix}|${trackerId}` },
-                ...(filter && { ':filter': { S: filter } })
+                ...(filter && { ':data': { S: filter } })
             },
             pageSize,
             nextPageKey,
